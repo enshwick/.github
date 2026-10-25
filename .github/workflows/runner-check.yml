@@ -1,0 +1,19 @@
+name: Runner check
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: enshwick
+    timeout-minutes: 5
+    steps:
+      - name: Describe the runner
+        run: |
+          uname -a
+          nproc
+          free -h
+          df -h "$RUNNER_WORKSPACE"
