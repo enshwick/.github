@@ -1,0 +1,56 @@
+name: Renovate
+
+on:
+  schedule:
+    - cron: "23 */4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    if: github.repository == 'enshwick/.github'
+    runs-on: enshwick
+    timeout-minutes: 30
+    steps:
+      - name: Mint the enshwick-ci token
+        id: token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.ENSHWICK_CI_CLIENT_ID }}
+          private-key: ${{ secrets.ENSHWICK_CI_PRIVATE_KEY }}
+          # Every repository of the organization: Renovate finds them itself.
+          owner: ${{ github.repository_owner }} # zizmor: ignore[github-app]
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-workflows: write
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.1
+
+      # Lock files are rewritten with the tools that own them.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - name: Install rustup
+        run: |
+          command -v rustup || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Run Renovate
+        env:
+          RENOVATE_TOKEN: ${{ steps.token.outputs.token }}
+          RENOVATE_PLATFORM: github
+          RENOVATE_AUTODISCOVER: "true"
+          RENOVATE_ONBOARDING: "false"
+          RENOVATE_REQUIRE_CONFIG: required
+          RENOVATE_GIT_AUTHOR: "enshwick-ci[bot] <347820590+enshwick-ci[bot]@users.noreply.github.com>"
+          LOG_LEVEL: info
+        run: npx --yes renovate@44.181.6

@@ -1,0 +1,113 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate preset of the enshwick repositories.",
+  "extends": [
+    "config:best-practices",
+    ":semanticCommits"
+  ],
+  "timezone": "Europe/Kyiv",
+  "platformCommit": "enabled",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ]
+  },
+  "packageRules": [
+    {
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest",
+        "lockFileMaintenance"
+      ],
+      "automerge": true
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "matchPackageNames": [
+        "/^wasmtime/"
+      ],
+      "groupName": "wasmtime"
+    },
+    {
+      "description": "Our own crates: picked up on the next run.",
+      "matchPackageNames": [
+        "/^enshwick-/",
+        "cargo-enshwick"
+      ],
+      "schedule": [
+        "at any time"
+      ],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "Its last release is from January 2024; the dashboard flags it once a year passes without one.",
+      "matchPackageNames": [
+        "iced-x86"
+      ],
+      "abandonmentThreshold": "1 year"
+    },
+    {
+      "description": "The toolchain and rust-version move together and bring new lints, so a person merges them.",
+      "matchDepNames": [
+        "rust"
+      ],
+      "groupName": "Rust toolchain",
+      "automerge": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "rust-version, the toolchain's major and minor, beside the built-in rust-toolchain manager.",
+      "managerFilePatterns": [
+        "/(^|/)Cargo\\.toml$/"
+      ],
+      "matchStrings": [
+        "rust-version\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+)\""
+      ],
+      "depNameTemplate": "rust",
+      "packageNameTemplate": "rust-lang/rust",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+)"
+    },
+    {
+      "customType": "regex",
+      "description": "Cargo tools installed in workflows and named in the docs.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
+        "/\\.md$/"
+      ],
+      "matchStrings": [
+        "(?:tool:\\s*|,|cargo install --locked )(?<depName>cargo-[a-z0-9-]+)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "crate"
+    },
+    {
+      "customType": "regex",
+      "description": "The nightly toolchain date in workflows.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "nightly-(?<currentValue>\\d{4}-\\d{2}-\\d{2})"
+      ],
+      "depNameTemplate": "rust-nightly",
+      "datasourceTemplate": "custom.rust-nightly",
+      "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
+    }
+  ],
+  "customDatasources": {
+    "rust-nightly": {
+      "defaultRegistryUrlTemplate": "https://static.rust-lang.org/dist/channel-rust-nightly-date.txt",
+      "format": "plain"
+    }
+  }
+}
