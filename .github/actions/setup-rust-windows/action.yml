@@ -1,0 +1,80 @@
+name: Set up Rust on Windows
+description: >-
+  On the owner's Windows runners: the pinned toolchain, cargo-xwin with the
+  Windows SDK and CRT, the toolchain's lld as lld-link and sccache, all in
+  one cache directory the runners share. No Visual Studio, nothing installed
+  machine-wide. Git Bash only.
+
+runs:
+  using: composite
+  steps:
+    # The runners share one cache; a directory made with mkdir is the lock
+    # (Git Bash has no flock), taken over when a killed job left it behind.
+    - name: Toolchain in the shared cache
+      shell: bash
+      run: | # zizmor: ignore[github-env] fixed paths only
+        cache="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}"
+        mkdir -p "$cache"
+        lock="$cache/.lock"
+        until mkdir "$lock" 2> /dev/null; do
+          if [ -n "$(find "$lock" -maxdepth 0 -mmin +15 2> /dev/null)" ]; then rmdir "$lock"; fi
+          sleep 2
+        done
+        trap 'rmdir "$lock"' EXIT
+        export RUSTUP_HOME="$cache/rustup" CARGO_HOME="$cache/cargo"
+        if [ ! -x "$CARGO_HOME/bin/rustup.exe" ]; then
+          curl --proto '=https' --tlsv1.2 -sSfL -o "$RUNNER_TEMP/rustup-init.exe" \
+            https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe
+          "$RUNNER_TEMP/rustup-init.exe" -y --profile minimal --default-toolchain none --no-modify-path
+        fi
+        "$CARGO_HOME/bin/rustup.exe" toolchain install
+        "$CARGO_HOME/bin/rustup.exe" component add llvm-tools
+        sysroot=$("$CARGO_HOME/bin/rustc.exe" --print sysroot)
+        bin="$sysroot/lib/rustlib/x86_64-pc-windows-msvc/bin"
+        mkdir -p "$RUNNER_TEMP/lld"
+        cp "$bin/rust-lld.exe" "$RUNNER_TEMP/lld/lld-link.exe"
+        cp "$bin/llvm-ar.exe" "$RUNNER_TEMP/lld/llvm-lib.exe"
+        {
+          echo "RUSTUP_HOME=$RUSTUP_HOME"
+          echo "CARGO_HOME=$CARGO_HOME"
+          echo "XWIN_CACHE_DIR=$cache/xwin"
+          echo "SCCACHE_DIR=$cache/sccache"
+          echo "SCCACHE_CACHE_SIZE=20G"
+          echo "CARGO_INCREMENTAL=0"
+          echo "CARGO_TERM_COLOR=always"
+        } >> "$GITHUB_ENV"
+        echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+        echo "$RUNNER_TEMP/lld" >> "$GITHUB_PATH"
+
+    # Into a directory of this job, as on Linux: installing into the shared
+    # cache would overwrite a binary another job is running.
+    - name: Give the tools a directory of this job
+      shell: bash
+      run: | # zizmor: ignore[github-env] fixed paths only
+        tools="$RUNNER_TEMP/tools"
+        mkdir -p "$tools/bin"
+        echo "SHARED_CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+        echo "CARGO_HOME=$tools" >> "$GITHUB_ENV"
+        echo "$tools/bin" >> "$GITHUB_PATH"
+
+    - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+      with:
+        tool: cargo-xwin@0.23.1,sccache@0.18.0
+
+    # The Windows SDK and CRT: cargo-xwin downloads them once into the
+    # shared cache, under the lock.
+    - name: Share the registry cache and fetch the SDK
+      shell: bash
+      run: | # zizmor: ignore[github-env] fixed paths only
+        echo "CARGO_HOME=$SHARED_CARGO_HOME" >> "$GITHUB_ENV"
+        echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+        export CARGO_HOME="$SHARED_CARGO_HOME"
+        lock="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}/.lock"
+        until mkdir "$lock" 2> /dev/null; do
+          if [ -n "$(find "$lock" -maxdepth 0 -mmin +15 2> /dev/null)" ]; then rmdir "$lock"; fi
+          sleep 2
+        done
+        trap 'rmdir "$lock"' EXIT
+        cargo xwin env --target x86_64-pc-windows-msvc > /dev/null
+        rustc --version
+        lld-link --version
