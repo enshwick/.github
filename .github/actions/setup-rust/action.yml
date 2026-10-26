@@ -92,9 +92,12 @@ runs:
         echo "CARGO_HOME=$tools" >> "$GITHUB_ENV"
         echo "$tools/bin" >> "$GITHUB_PATH"
 
+    # Every version here must be in install-action's manifests at this SHA:
+    # a version it lacks falls back to cargo-binstall, which fails in the
+    # per-job tools directory.
     - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
       with:
-        tool: cargo-xwin@0.23.1,sccache@0.19.0${{ inputs.tools != '' && format(',{0}', inputs.tools) || '' }}
+        tool: cargo-xwin@0.23.1,sccache@0.18.0${{ inputs.tools != '' && format(',{0}', inputs.tools) || '' }}
 
     - name: Share the registry cache again
       shell: bash
