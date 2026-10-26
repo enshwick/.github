@@ -1,0 +1,7 @@
+{
+  "name": "enshwick mod docs",
+  "description": "Starts the docs site's build when the mod's player pages change on main.",
+  "iconName": "octicon book",
+  "categories": ["Rust"],
+  "filePatterns": ["^Cargo\\.toml$"]
+}
