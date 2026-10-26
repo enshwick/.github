@@ -38,17 +38,25 @@ jobs:
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
 
       # The stock runner image has no gh, which looks up the mods' dev
-      # prereleases and publishes this one.
+      # prereleases and publishes this one. The release binary, checked
+      # against its published checksum, stays in the tool cache; apt would
+      # race other jobs for the shared archive lock.
       - name: Install gh
+        env:
+          GH_VERSION: 2.102.0
+          GH_SHA256: bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386
         run: |
-          if ! command -v gh > /dev/null; then
-            archives="${RUNNER_TOOL_CACHE:-$HOME/.cache}/apt"
-            mkdir -p "$archives/partial"
-            sudo apt-get -o Dir::Cache::archives="$archives" update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Cache::archives="$archives" \
-              install -y -qq --no-install-recommends gh
+          dir="${RUNNER_TOOL_CACHE:-$HOME/.cache}/gh/$GH_VERSION"
+          if [ ! -x "$dir/bin/gh" ]; then
+            archive="$RUNNER_TEMP/gh.tar.gz"
+            curl --proto '=https' --tlsv1.2 -sSfL -o "$archive" \
+              "https://github.com/cli/cli/releases/download/v$GH_VERSION/gh_${GH_VERSION}_linux_amd64.tar.gz"
+            echo "$GH_SHA256  $archive" | sha256sum -c -
+            mkdir -p "$dir"
+            tar -xzf "$archive" -C "$dir" --strip-components 1
           fi
-          gh --version
+          echo "$dir/bin" >> "$GITHUB_PATH"
+          "$dir/bin/gh" --version
 
       # The token reads the dev prereleases of the mods' own repositories.
       - name: cargo xtask bundle
