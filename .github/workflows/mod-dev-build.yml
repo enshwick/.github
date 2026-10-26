@@ -1,0 +1,76 @@
+name: Mod dev build
+
+# A mod's development build of the commit it runs on, until the first public
+# release, 1.0.0: the release DLL and its PDB replace the files of the
+# caller's single prerelease `dev`, whose tag moves to the commit. The
+# platform's dev bundle picks the DLL up from there. The caller grants
+# `contents: write`.
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  build:
+    runs-on: enshwick
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Checked out and used by path: the organization refuses actions not
+      # pinned by SHA. From main, the only ref the runners run workflows from.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: enshwick/.github
+          ref: main
+          path: .enshwick-ci
+          persist-credentials: false
+      - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
+
+      - name: Build
+        run: |
+          cargo xwin build --release --locked --target x86_64-pc-windows-msvc
+          mkdir -p "$RUNNER_TEMP/dev"
+          cp target/x86_64-pc-windows-msvc/release/*.dll target/x86_64-pc-windows-msvc/release/*.pdb "$RUNNER_TEMP/dev/"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: ${{ runner.temp }}/dev
+        run: |
+          short=$(git -C "$GITHUB_WORKSPACE" rev-parse --short=7 HEAD)
+          title="Dev $short"
+          notes="Development build of $GITHUB_SHA: $(git -C "$GITHUB_WORKSPACE" log -1 --format=%s).
+
+          Until the first public release, 1.0.0, this prerelease is the only build to download; every run replaces it. Put the DLL into the game's mods folder, next to the Enshwick loader."
+          assets=(*.dll *.pdb)
+          if gh release view dev --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/dev" -f sha="$GITHUB_SHA" -F force=true > /dev/null
+            gh release edit dev --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" --prerelease --latest=false
+            gh release upload dev "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            # Files of an earlier build that this one no longer has, such as
+            # the archive of a mod that now releases from its own repository, go.
+            gh release view dev --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' |
+              while read -r name; do
+                case " ${assets[*]} " in
+                  *" $name "*) ;;
+                  *) gh release delete-asset dev "$name" --yes --repo "$GITHUB_REPOSITORY" ;;
+                esac
+              done
+          else
+            # A tag left without its release moves too; gh would build on it as it is.
+            if gh api "repos/$GITHUB_REPOSITORY/git/refs/tags/dev" > /dev/null 2>&1; then
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/dev" -f sha="$GITHUB_SHA" -F force=true > /dev/null
+            fi
+            gh release create dev "${assets[@]}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "$title" --notes "$notes" --prerelease --latest=false
+          fi
+
+      - name: sccache statistics
+        if: always() && env.RUSTC_WRAPPER == 'sccache'
+        run: command -v sccache > /dev/null && sccache --show-stats || true
