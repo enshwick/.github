@@ -1,8 +1,11 @@
 name: Windows native tests
 
-# By hand: tests of a repository at any ref, natively on the owner's PC
-# (label `enshwick-pc`), with the output shown. For chasing failures that
-# Wine does not show. The PC is the owner's: one job, bounded.
+# By hand: tests of an enshwick repository at any of its refs, natively on
+# the owner's PC (label `enshwick-pc`), with the output shown. For chasing
+# failures that Wine does not show. Only members can start it, and it runs
+# only the organization's own branches, the trust the pull request lane on
+# the same runners already gives them. The PC is the owner's: one job,
+# bounded.
 
 on:
   workflow_dispatch:
@@ -42,6 +45,15 @@ jobs:
     env:
       CARGO_BUILD_JOBS: "3"
     steps:
+      - name: Only the organization's repositories
+        env:
+          REPOSITORY: ${{ inputs.repository }}
+        run: |
+          case "$REPOSITORY" in
+            enshwick/*) ;;
+            *) echo "::error::only enshwick/* repositories"; exit 1 ;;
+          esac
+
       - name: Long paths
         run: git config --global core.longpaths true
 
