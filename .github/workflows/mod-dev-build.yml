@@ -5,10 +5,17 @@ name: Mod dev build
 # `mods/<package>.dll` and the license, and the PDB; they replace the files
 # of the caller's single prerelease `dev`, whose tag moves to the commit.
 # Players download the zip, and the platform's dev bundle takes it from
-# there. The caller grants `contents: write`.
+# there. A repository whose `cargo xtask dist` writes another archive, such
+# as a program, says in `install` what to do with it. The caller grants
+# `contents: write`.
 
 on:
   workflow_call:
+    inputs:
+      install:
+        description: What the release notes tell players to do with the zip.
+        type: string
+        default: Extract the zip into the folder that holds the Enshwick loader.
 
 permissions: {}
 
@@ -72,13 +79,16 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          INSTALL: ${{ inputs.install }}
         working-directory: ${{ runner.temp }}/dev
         run: |
           short=$(git -C "$GITHUB_WORKSPACE" rev-parse --short=7 HEAD)
           title="Dev $short"
           notes="Development build of $GITHUB_SHA: $(git -C "$GITHUB_WORKSPACE" log -1 --format=%s).
 
-          Until the first public release, 1.0.0, this prerelease is the only build to download; every run replaces it. Extract the zip into the folder that holds the Enshwick loader."
+          Until the first public release, 1.0.0, this prerelease is the only build to download; every run replaces it. $INSTALL"
+          # A build without a DLL has no SBOM of its own.
+          shopt -s nullglob
           assets=(*.zip *.pdb *.cdx.json)
           if gh release view dev --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/dev" -f sha="$GITHUB_SHA" -F force=true > /dev/null
