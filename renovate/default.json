@@ -1,0 +1,168 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate preset of the enshwick repositories, extended as github>enshwick/.github//renovate/default.",
+  "extends": [
+    "config:best-practices",
+    ":semanticCommits"
+  ],
+  "timezone": "Europe/Kyiv",
+  "platformCommit": "enabled",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ]
+  },
+  "packageRules": [
+    {
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest",
+        "lockFileMaintenance"
+      ],
+      "automerge": true
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "matchPackageNames": [
+        "/^wasmtime/"
+      ],
+      "groupName": "wasmtime"
+    },
+    {
+      "description": "Our own crates: picked up on the next run, prereleases included while the platform is in alpha, all in one update.",
+      "matchPackageNames": [
+        "/^enshwick(-|$)/",
+        "cargo-enshwick"
+      ],
+      "schedule": [
+        "at any time"
+      ],
+      "minimumReleaseAge": null,
+      "groupName": "enshwick",
+      "ignoreUnstable": false,
+      "respectLatest": false,
+      "rangeStrategy": "bump"
+    },
+    {
+      "description": "Its last release is from January 2024; the dashboard flags it once a year passes without one.",
+      "matchPackageNames": [
+        "iced-x86"
+      ],
+      "abandonmentThreshold": "1 year"
+    },
+    {
+      "description": "The toolchain and rust-version move together and bring new lints, so a person merges them.",
+      "matchDepNames": [
+        "rust"
+      ],
+      "groupName": "Rust toolchain",
+      "automerge": false
+    },
+    {
+      "description": "Tools CI installs through taiki-e/install-action: a version its manifests lack yet falls back to cargo-binstall, which fails on the runners, so a new version waits until install-action has it.",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDatasources": [
+        "crate"
+      ],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "The dedicated server's pins in image.toml wait three days. A new GE-Proton also needs its sha512 written by hand, so it never merges on its own.",
+      "matchFileNames": [
+        "**/image.toml",
+        "image.toml"
+      ],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "matchDepNames": [
+        "GloriousEggroll/proton-ge-custom"
+      ],
+      "automerge": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "rust-version, the toolchain's major and minor, beside the built-in rust-toolchain manager.",
+      "managerFilePatterns": [
+        "/(^|/)Cargo\\.toml$/"
+      ],
+      "matchStrings": [
+        "rust-version\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+)\""
+      ],
+      "depNameTemplate": "rust",
+      "packageNameTemplate": "rust-lang/rust",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+)"
+    },
+    {
+      "customType": "regex",
+      "description": "Cargo tools installed in workflows and composite actions, and named in the docs.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
+        "/(^|/)\\.github/actions/.+/action\\.ya?ml$/",
+        "/\\.md$/"
+      ],
+      "matchStrings": [
+        "(?:tool:\\s*|,|cargo install --locked )(?<depName>cargo-[a-z0-9-]+)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "crate"
+    },
+    {
+      "customType": "regex",
+      "description": "The nightly toolchain date in workflows.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "nightly-(?<currentValue>\\d{4}-\\d{2}-\\d{2})"
+      ],
+      "depNameTemplate": "rust-nightly",
+      "datasourceTemplate": "custom.rust-nightly",
+      "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
+    },
+    {
+      "customType": "regex",
+      "description": "The base image of the dedicated server, by tag and digest, in image.toml.",
+      "managerFilePatterns": [
+        "/(^|/)image\\.toml$/"
+      ],
+      "matchStrings": [
+        "base = \"(?<depName>[^:\"]+):(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""
+      ],
+      "datasourceTemplate": "docker",
+      "autoReplaceStringTemplate": "base = \"{{depName}}:{{newValue}}@{{newDigest}}\""
+    },
+    {
+      "customType": "regex",
+      "description": "The GE-Proton build of the dedicated server image, version and download, in image.toml.",
+      "managerFilePatterns": [
+        "/(^|/)image\\.toml$/"
+      ],
+      "matchStrings": [
+        "version = \"(?<currentValue>GE-Proton\\d+-\\d+)\"\\nurl = \"[^\"]*\""
+      ],
+      "depNameTemplate": "GloriousEggroll/proton-ge-custom",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^GE-Proton(?<major>\\d+)-(?<minor>\\d+)$",
+      "autoReplaceStringTemplate": "version = \"{{newValue}}\"\nurl = \"https://github.com/GloriousEggroll/proton-ge-custom/releases/download/{{newValue}}/{{newValue}}-x86_64.tar.gz\""
+    }
+  ],
+  "customDatasources": {
+    "rust-nightly": {
+      "defaultRegistryUrlTemplate": "https://static.rust-lang.org/dist/channel-rust-nightly-date.txt",
+      "format": "plain"
+    }
+  }
+}
