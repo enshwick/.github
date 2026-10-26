@@ -138,10 +138,15 @@ jobs:
       - if: env.HOSTED == 'true'
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
-          path: |
-            ${{ runner.tool_cache }}/rustup
-            ${{ runner.tool_cache }}/xwin
-          key: toolchain-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-xwin-0.23.1
+          path: ${{ runner.tool_cache }}/rustup
+          key: rustup-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
+      # The Windows SDK and CRT cargo-xwin downloads, about 12 minutes from
+      # Microsoft on a hosted runner; only the Windows parts fill it.
+      - if: env.HOSTED == 'true' && matrix.part != 'host'
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ runner.tool_cache }}/xwin
+          key: xwin-${{ runner.os }}-0.23.1-v1
       - if: env.HOSTED == 'true' && matrix.part != 'host'
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
