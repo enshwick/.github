@@ -24,6 +24,14 @@ on:
         description: Run the host check, the Windows lint and the Windows tests as parallel jobs; the repository's `cargo xtask check` must know `--part`.
         type: boolean
         default: false
+      native-tests:
+        description: Run the Windows tests natively on the owner's PC when it is online; off, they run under Wine on the organization runners.
+        type: boolean
+        default: false
+      clippy-features:
+        description: Features the Windows lint on the owner's PC turns on, as `cargo clippy --features` takes them.
+        type: string
+        default: ""
       semver:
         description: Packages checked with cargo-semver-checks against their last release on crates.io, space-separated; none when empty.
         type: string
@@ -106,8 +114,8 @@ jobs:
           echo "skip=$reason" >> "$GITHUB_OUTPUT"
 
   part:
-    needs: scope
-    if: needs.scope.outputs.skip == ''
+    needs: [scope, windows-gate]
+    if: always() && needs.scope.result == 'success' && needs.scope.outputs.skip == ''
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -115,6 +123,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The Windows lint runs here only while the owner's PC is offline.
         part: ${{ fromJSON(inputs.split && '["host", "windows-lint"]' || '["all"]') }}
     env:
       # A merge queue entry is checked against the entry before it (its
@@ -243,9 +252,55 @@ jobs:
           echo "PC runners online: $count"
           if [ "$count" -gt 0 ]; then echo "native=true"; else echo "native=false"; fi >> "$GITHUB_OUTPUT"
 
-  windows-native:
+  # The Windows lint (clippy for the msvc target) on the owner's PC while it
+  # is online; otherwise the part `windows-lint` runs it with cargo-xwin on
+  # a hosted runner.
+  windows-lint-native:
     needs: [scope, windows-gate]
     if: needs.windows-gate.outputs.native == 'true'
+    runs-on: [self-hosted, Windows, X64, enshwick-pc]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Ten runners share one 16-core PC that is also the owner's.
+      CARGO_BUILD_JOBS: "3"
+      FEATURES: ${{ inputs.clippy-features }}
+    steps:
+      - name: Long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: enshwick/.github
+          ref: main
+          path: .enshwick-ci
+          persist-credentials: false
+
+      - uses: ./.enshwick-ci/.github/actions/setup-rust-windows # zizmor: ignore[self-repository]
+
+      - name: Windows lint
+        run: |
+          # cargo-xwin's PATH is in Windows form and would hide bash's tools.
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep -v '^export PATH=')"
+          args=(--target x86_64-pc-windows-msvc --workspace --all-targets)
+          if [ -n "$FEATURES" ]; then args+=(--features "$FEATURES"); fi
+          cargo clippy "${args[@]}" -- -D warnings
+
+      - name: Clean up
+        if: always()
+        run: rm -rf target
+
+  windows-native:
+    needs: [scope, windows-gate]
+    if: inputs.native-tests && needs.windows-gate.outputs.native == 'true'
     runs-on: [self-hosted, Windows, X64, enshwick-pc]
     timeout-minutes: 20
     permissions:
@@ -321,7 +376,7 @@ jobs:
     needs: [scope, windows-gate, windows-native]
     if: >-
       always() && inputs.split && needs.scope.outputs.skip == '' && github.event_name != 'pull_request'
-      && (needs.windows-gate.outputs.native != 'true' || needs.windows-native.result == 'failure')
+      && (needs.windows-gate.outputs.native != 'true' || !inputs.native-tests || needs.windows-native.result == 'failure')
     runs-on: enshwick
     timeout-minutes: 45
     permissions:
@@ -370,7 +425,7 @@ jobs:
 
   # The required check: every part passed, or there was nothing to prove.
   check:
-    needs: [scope, part, windows-gate, windows-native, windows-wine]
+    needs: [scope, part, windows-gate, windows-lint-native, windows-native, windows-wine]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -381,13 +436,14 @@ jobs:
           SCOPE: ${{ needs.scope.result }}
           PART: ${{ needs.part.result }}
           GATE: ${{ needs.windows-gate.result }}
+          LINT: ${{ needs.windows-lint-native.result }}
           NATIVE: ${{ needs.windows-native.result }}
           WINE: ${{ needs.windows-wine.result }}
         run: |
-          echo "scope: $SCOPE, parts: $PART, Windows gate: $GATE, native: $NATIVE, Wine: $WINE"
+          echo "scope: $SCOPE, parts: $PART, Windows gate: $GATE, PC lint: $LINT, PC tests: $NATIVE, Wine: $WINE"
           ok() { [ "$1" = success ] || [ "$1" = skipped ]; }
           # The Windows tests passed on one path, or neither had to run.
           windows=false
           if [ "$NATIVE" = success ] || [ "$WINE" = success ]; then windows=true; fi
           if [ "$NATIVE" = skipped ] && [ "$WINE" = skipped ]; then windows=true; fi
-          [ "$SCOPE" = success ] && ok "$PART" && ok "$GATE" && [ "$windows" = true ]
+          [ "$SCOPE" = success ] && ok "$PART" && ok "$GATE" && ok "$LINT" && [ "$windows" = true ]
