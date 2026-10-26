@@ -1,5 +1,12 @@
 name: Rust CI
 
+# `cargo xtask check` for a pull request, a merge queue entry, a push to main
+# or the nightly run. Pull requests, pushes and the nightly run use
+# GitHub-hosted runners, with the toolchain, the Windows SDK and the build
+# cached between runs; merge queue entries use the organization runners, so
+# the queue never waits behind pull requests. With `split` the check runs as
+# parallel jobs. The job `check` sums them up and is the required check.
+
 on:
   workflow_call:
     inputs:
@@ -11,6 +18,10 @@ on:
         description: Run the Windows-only crates' tests under Wine.
         type: boolean
         default: true
+      split:
+        description: Run the host check, the Windows lint and the Windows tests as parallel jobs; the repository's `cargo xtask check` must know `--part`.
+        type: boolean
+        default: false
       semver:
         description: Packages checked with cargo-semver-checks against their last release on crates.io, space-separated; none when empty.
         type: string
@@ -19,21 +30,19 @@ on:
 permissions: {}
 
 jobs:
-  check:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: enshwick
-    timeout-minutes: 45
+  scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     permissions:
       contents: read
+    outputs:
+      skip: ${{ steps.scope.outputs.skip }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      # Checked out and used by path: the organization refuses actions not
-      # pinned by SHA, and actionlint cannot read the `$/` form yet. From
-      # main, the only ref the runners run workflows from.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: enshwick/.github
@@ -87,33 +96,105 @@ jobs:
           fi
           echo "skip=$reason" >> "$GITHUB_OUTPUT"
 
-      - if: steps.scope.outputs.skip == ''
+  part:
+    needs: scope
+    if: needs.scope.outputs.skip == ''
+    runs-on: ${{ github.event_name == 'merge_group' && 'enshwick' || 'ubuntu-24.04' }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ${{ fromJSON(inputs.split && '["host", "windows-lint", "windows-tests"]' || '["all"]') }}
+    env:
+      # A merge queue entry is checked against the entry before it (its
+      # group's parent): only its own pull request's changes are new.
+      BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
+      FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
+      PART: ${{ matrix.part }}
+      HOSTED: ${{ github.event_name != 'merge_group' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Checked out and used by path: the organization refuses actions not
+      # pinned by SHA, and actionlint cannot read the `$/` form yet. From
+      # main, the only ref the runners run workflows from.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: enshwick/.github
+          ref: main
+          path: .enshwick-ci
+          persist-credentials: false
+
+      - name: Fetch the base
+        run: git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
+
+      # On a GitHub-hosted runner nothing persists between jobs: the
+      # toolchain, the Windows SDK and the Wine packages come from the cache.
+      - if: env.HOSTED == 'true'
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: |
+            ${{ runner.tool_cache }}/rustup
+            ${{ runner.tool_cache }}/xwin
+          key: toolchain-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-xwin-0.23.1
+      - if: env.HOSTED == 'true' && matrix.part != 'host'
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ runner.tool_cache }}/apt-archives
+          key: apt-${{ runner.os }}-${{ matrix.part }}-v1
+
+      - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
+        with:
+          tools: cargo-nextest@0.9.149,cargo-deny@0.20.2${{ inputs.semver != '' && matrix.part != 'windows-lint' && matrix.part != 'windows-tests' && ',cargo-semver-checks@0.51.0' || '' }}
+          wine: ${{ matrix.part == 'all' && inputs.windows-tests }}
+
+      # The build itself, per part: each job builds a different target.
+      - if: env.HOSTED == 'true'
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: ${{ matrix.part }}
+          cache-on-failure: true
+
+      # The Windows tests set up Wine only when a package with such tests
+      # changed.
+      - name: Windows tests to run
+        id: wine
+        if: matrix.part == 'windows-tests'
+        run: |
+          args=()
+          if [ "$FULL" = true ]; then args+=(--all); else args+=(--base "$BASE"); fi
+          tests=$(cargo xtask check "${args[@]}" --list-windows-tests | xargs)
+          echo "Windows tests: ${tests:-none}"
+          echo "tests=$tests" >> "$GITHUB_OUTPUT"
+      - if: matrix.part == 'windows-tests' && steps.wine.outputs.tests != ''
         uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
         with:
-          tools: cargo-nextest@0.9.149,cargo-deny@0.20.2${{ inputs.semver != '' && ',cargo-semver-checks@0.51.0' || '' }}
-          wine: ${{ inputs.windows-tests }}
+          wine: true
 
       - name: cargo xtask check
-        if: steps.scope.outputs.skip == ''
+        if: matrix.part != 'windows-tests' || steps.wine.outputs.tests != ''
         env:
-          # A merge queue entry is checked against the entry before it (its
-          # group's parent): only its own pull request's changes are new.
-          BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
-          # A merge queue group gets the fast lane too: the changes of its
-          # pull requests on top of main.
-          FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
           WINDOWS: ${{ inputs.windows-tests }}
         run: |
           args=()
           if [ "$FULL" = true ]; then args+=(--all); else args+=(--base "$BASE"); fi
-          if [ "$WINDOWS" = true ]; then args+=(--windows); fi
-          cargo fmt --all --check
+          if [ "$PART" = all ]; then
+            if [ "$WINDOWS" = true ]; then args+=(--windows); fi
+          else
+            args+=(--part "$PART")
+          fi
+          if [ "$PART" = all ] || [ "$PART" = host ]; then cargo fmt --all --check; fi
           cargo xtask check "${args[@]}"
 
       # A version that claims less change than the public API made fails;
       # unreleased changes keep the released version and pass.
       - name: cargo semver-checks
-        if: steps.scope.outputs.skip == '' && inputs.semver != ''
+        if: inputs.semver != '' && (matrix.part == 'all' || matrix.part == 'host')
         env:
           PACKAGES: ${{ inputs.semver }}
         run: |
@@ -124,3 +205,19 @@ jobs:
       - name: sccache statistics
         if: always() && env.RUSTC_WRAPPER == 'sccache'
         run: command -v sccache > /dev/null && sccache --show-stats || true
+
+  # The required check: every part passed, or there was nothing to prove.
+  check:
+    needs: [scope, part]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Result
+        env:
+          SCOPE: ${{ needs.scope.result }}
+          PART: ${{ needs.part.result }}
+        run: |
+          echo "scope: $SCOPE, parts: $PART"
+          [ "$SCOPE" = success ] && { [ "$PART" = success ] || [ "$PART" = skipped ]; }
