@@ -29,25 +29,25 @@ body:
     id: game
     attributes:
       label: Game version
-      description: "`logs/enshwick/status.log` names it, beside the loader version."
+      description: "`logs/enshwick/report.md` names it, beside the loader version."
     validations:
       required: true
   - type: input
     id: loader
     attributes:
       label: Loader version
-      description: "Named in `logs/enshwick/status.log`."
+      description: "Named at the top of `logs/enshwick/report.md`."
     validations:
       required: true
   - type: textarea
     id: mods
     attributes:
       label: Mods
-      description: Only when `status.log` cannot be attached; every file in the game's `mods` folder.
+      description: Only when `report.md` cannot be attached; every file in the game's `mods` folder.
   - type: textarea
     id: logs
     attributes:
-      label: Logs
-      description: Drag `loader.log`, `status.log` and, after a crash, `crash.log` from `logs/enshwick/` here.
+      label: Report
+      description: Drag `report.md` from `logs/enshwick/` here, and after a crash `crash.log` too.
     validations:
       required: true

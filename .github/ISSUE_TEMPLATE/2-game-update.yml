@@ -16,7 +16,7 @@ body:
     id: game
     attributes:
       label: Game version
-      description: "`logs/enshwick/status.log` names it, beside the loader version."
+      description: "`logs/enshwick/report.md` names it, beside the loader version."
     validations:
       required: true
   - type: dropdown
@@ -33,13 +33,13 @@ body:
     id: loader
     attributes:
       label: Loader version
-      description: "Named in `logs/enshwick/status.log`."
+      description: "Named at the top of `logs/enshwick/report.md`."
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Logs
-      description: Drag `loader.log` and `status.log` from `logs/enshwick/` here.
+      label: Report
+      description: Drag `report.md` from `logs/enshwick/` here.
     validations:
       required: true
