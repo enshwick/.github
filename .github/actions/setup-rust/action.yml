@@ -43,7 +43,7 @@ runs:
         WINE: ${{ inputs.wine }}
       run: |
         packages=(clang lld)
-        if [ "$WINE" = true ]; then packages+=(wine64); fi
+        if [ "$WINE" = true ]; then packages+=(wine wine64); fi
         missing=()
         for package in "${packages[@]}"; do
           dpkg -s "$package" > /dev/null 2>&1 || missing+=("$package")
@@ -56,7 +56,6 @@ runs:
             install -y -qq --no-install-recommends "${missing[@]}"
         fi
         if [ "$WINE" = true ]; then
-          command -v wine > /dev/null || sudo ln -s "$(command -v wine64)" /usr/local/bin/wine
           WINEDEBUG=-all wineboot -i > /dev/null 2>&1 || true
           echo "WINEDEBUG=-all" >> "$GITHUB_ENV"
         fi
