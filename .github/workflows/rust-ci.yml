@@ -56,7 +56,9 @@ jobs:
       - name: cargo xtask check
         env:
           BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
-          FULL: ${{ inputs.full || github.event_name != 'pull_request' }}
+          # A merge queue group gets the fast lane too: the changes of its
+          # pull requests on top of main.
+          FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
           WINDOWS: ${{ inputs.windows-tests }}
         run: |
           args=()
