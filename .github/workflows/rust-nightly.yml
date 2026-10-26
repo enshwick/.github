@@ -3,7 +3,7 @@ name: Rust nightly
 # The checks too slow for a pull request, once a night on the organization
 # runners: Miri on the packages a repository names, unused dependencies,
 # coverage, external links, benchmarks and, where a repository asks, its fuzz
-# targets, loom models and tests under AddressSanitizer. Every step runs even after another failed, so one night reports
+# targets, loom models, Kani proofs and tests under AddressSanitizer. Every step runs even after another failed, so one night reports
 # everything. Packages that build only for Windows
 # (`[package.metadata.enshwick] windows-only = true`) stay out: these checks
 # run on the Linux host.
@@ -31,6 +31,10 @@ on:
         description: cargo test arguments for the loom models, built with `--cfg loom`, such as `-p a-crate --test loom_chains`; none when empty.
         type: string
         default: ""
+      kani:
+        description: cargo kani arguments, one run per line, such as `-p a-crate --lib --tests --harness proofs`; none when empty.
+        type: string
+        default: ""
       asan:
         description: cargo test arguments for the tests to run under AddressSanitizer, such as `-p a-crate --lib`; none when empty.
         type: string
@@ -49,6 +53,8 @@ jobs:
       NIGHTLY: nightly-2026-10-26
       # Built from source: install-action has no prebuilt cargo-fuzz.
       CARGO_FUZZ: 0.13.2
+      # Built from source too; `cargo kani setup` fetches its own toolchain.
+      KANI: 0.68.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -137,6 +143,26 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # one word per argument
           cargo test --release --target-dir target/loom $ARGS
+
+      - name: Kani proofs
+        if: ${{ !cancelled() && inputs.kani != '' }}
+        env:
+          RUNS: ${{ inputs.kani }}
+        run: |
+          export KANI_HOME="${RUNNER_TOOL_CACHE:-$HOME/.cache}/kani"
+          if ! cargo kani --version 2> /dev/null | grep -q " $KANI "; then
+            flock "$CARGO_HOME.lock" cargo install --locked "kani-verifier@$KANI"
+          fi
+          if [ ! -d "$KANI_HOME/kani-$KANI" ]; then
+            flock "$KANI_HOME.lock" cargo kani setup
+          fi
+          failed=0
+          while IFS= read -r args; do
+            [ -n "$args" ] || continue
+            # shellcheck disable=SC2086 # one word per argument
+            cargo kani --target-dir target/kani $args || failed=1
+          done <<< "$RUNS"
+          exit "$failed"
 
       # The host target named, so build scripts and proc macros stay
       # uninstrumented.
