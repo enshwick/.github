@@ -1,0 +1,103 @@
+name: Container image
+
+# The caller's container image, built by its `cargo xtask image` without a
+# Docker daemon (the runners have none): the task appends its layers to a
+# pinned base image with crane. With `push`, the image goes to
+# ghcr.io/<repository> as `edge` and `sha-<commit>`, with build provenance;
+# without, it is only built, as a check. The caller grants `contents: read`,
+# and `packages: write`, `id-token: write` and `attestations: write` to push.
+
+on:
+  workflow_call:
+    inputs:
+      push:
+        description: Push the image and its provenance; off builds it only.
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  image:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: enshwick
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Checked out and used by path: the organization refuses actions not
+      # pinned by SHA. From main, the only ref the runners run workflows from.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: enshwick/.github
+          ref: main
+          path: .enshwick-ci
+          persist-credentials: false
+      - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
+        with:
+          gh: true
+
+      # crane, checked against its published checksum, stays in the tool
+      # cache; unpacked beside it and renamed into place, so a job never sees
+      # a half-written copy.
+      - name: Install crane
+        env:
+          CRANE_VERSION: 0.22.1
+          CRANE_SHA256: 0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0
+        run: | # zizmor: ignore[github-env] fixed paths only
+          dir="${RUNNER_TOOL_CACHE:-$HOME/.cache}/crane/$CRANE_VERSION"
+          if [ ! -x "$dir/crane" ]; then
+            archive="$RUNNER_TEMP/crane.tar.gz"
+            curl --proto '=https' --tlsv1.2 -sSfL -o "$archive" \
+              "https://github.com/google/go-containerregistry/releases/download/v$CRANE_VERSION/go-containerregistry_Linux_x86_64.tar.gz"
+            echo "$CRANE_SHA256  $archive" | sha256sum -c -
+            staging="$(dirname "$dir")/.staging-$GITHUB_RUN_ID-$GITHUB_JOB-$$"
+            mkdir -p "$staging"
+            tar -xzf "$archive" -C "$staging" crane
+            mv -T "$staging" "$dir" 2> /dev/null || rm -rf "$staging"
+          fi
+          echo "$dir" >> "$GITHUB_PATH"
+
+      # The large downloads and layers (Proton) are kept between runs, so
+      # an unchanged pin is neither downloaded nor repacked again.
+      - name: cargo xtask image
+        id: image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUSH: ${{ inputs.push }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          export ENSHWICK_IMAGE_CACHE="${RUNNER_TOOL_CACHE:-$HOME/.cache}/enshwick-image/$REPOSITORY"
+          image="ghcr.io/${REPOSITORY,,}"
+          if [ "$PUSH" = true ]; then
+            crane auth login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<< "$GH_TOKEN"
+            cargo xtask image --tag "$image:edge" --tag "$image:sha-${GITHUB_SHA::7}" \
+              --digest-file "$RUNNER_TEMP/digest"
+            {
+              echo "name=$image"
+              echo "digest=$(cat "$RUNNER_TEMP/digest")"
+            } >> "$GITHUB_OUTPUT"
+            echo "pushed $image:edge, $(cat "$RUNNER_TEMP/digest")" >> "$GITHUB_STEP_SUMMARY"
+          else
+            cargo xtask image --output "$RUNNER_TEMP/image.tar"
+            rm -f "$RUNNER_TEMP/image.tar"
+          fi
+
+      - name: Build provenance
+        if: inputs.push
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+
+      - name: sccache statistics
+        if: always() && env.RUSTC_WRAPPER == 'sccache'
+        run: sccache --show-stats
