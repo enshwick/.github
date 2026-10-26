@@ -1,0 +1,69 @@
+name: Game build watch
+
+# Asks Steam for the public build of the Enshrouded dedicated server and
+# client and opens one issue per build the caller's build tables do not name
+# (`steam_build = <id>` in `<tables>/<side>-*.toml`). The build ids come from
+# Steam's app info through api.steamcmd.net, which logs in anonymously; no
+# Steam account is needed to see them. The caller grants `issues: write`.
+
+on:
+  workflow_call:
+    inputs:
+      tables:
+        description: The directory of the build tables.
+        type: string
+        default: crates/enshwick-gamedata/tables
+
+permissions: {}
+
+jobs:
+  watch:
+    runs-on: enshwick
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ${{ inputs.tables }}
+
+      - name: Builds without a table
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TABLES: ${{ inputs.tables }}
+        run: |
+          for entry in server:2278520 client:1203620; do
+            side=${entry%%:*}
+            app=${entry#*:}
+            info=$(curl --proto '=https' --tlsv1.2 -sSf --retry 3 "https://api.steamcmd.net/v1/info/$app")
+            build=$(jq -r --arg app "$app" '.data[$app].depots.branches.public.buildid // empty' <<< "$info")
+            case "$build" in
+              '' | *[!0-9]*) echo "::error::no public build id for app $app"; exit 1 ;;
+            esac
+            if grep -qx "steam_build = $build" "$TABLES/$side"-*.toml 2> /dev/null; then
+              echo "$side build $build has a table"
+              continue
+            fi
+            title="Game $side build $build has no build table"
+            open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state all --search "\"$title\" in:title" \
+              --json number --jq length)
+            if [ "$open" != 0 ]; then
+              echo "$side build $build: an issue exists"
+              continue
+            fi
+            updated=$(jq -r --arg app "$app" '.data[$app].depots.branches.public.timeupdated // empty' <<< "$info")
+            {
+              echo "Steam's public branch of the Enshrouded $side (app $app) is at build $build"
+              [ -z "$updated" ] || echo "since $(date -u -d "@$updated" '+%F %H:%M') UTC"
+              echo "and no build table names it. Until one does, the loader runs this build on"
+              echo "the code patterns of the newest table, and what they miss stays off."
+              echo
+              echo "Port the table with \`cargo enshwick pin\` against the previous build's"
+              echo "executable, as [its README](https://github.com/$GITHUB_REPOSITORY/blob/main/crates/cargo-enshwick/README.md#porting-build-rows-pin)"
+              echo "describes, and open a pull request with it. Never commit game files."
+            } > "$RUNNER_TEMP/body.md"
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+              --label game-update --body-file "$RUNNER_TEMP/body.md"
+          done
