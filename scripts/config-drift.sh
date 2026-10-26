@@ -9,18 +9,13 @@ repo=$1
 template=$2
 found=0
 
-# Files every repository rendered from the template keeps as rendered;
-# a change belongs in template-mod and reaches the mods with copier update.
-shared=(
-  rustfmt.toml clippy.toml deny.toml rust-toolchain.toml lefthook.yml
-  renovate.json .markdownlint-cli2.yaml .cargo/config.toml
-  tools/check-commit-message.ts
-  .github/workflows/ci.yml .github/workflows/dev-build.yml
-  .github/workflows/release-plz.yml
-)
-
 if [ -f "$repo/.copier-answers.yml" ]; then
   commit=$(sed -n 's/^_commit: *//p' "$repo/.copier-answers.yml")
+  # template-mod's shared-files.txt names the files a rendered repository
+  # keeps as rendered; a pin older than that list takes the newest one.
+  list=$(git -C "$template" show "$commit:shared-files.txt" 2> /dev/null ||
+    git -C "$template" show "HEAD:shared-files.txt")
+  mapfile -t shared < <(grep -v -e '^#' -e '^$' <<< "$list")
   for file in "${shared[@]}"; do
     # A file the pinned template does not have yet is not drift.
     git -C "$template" cat-file -e "$commit:template/$file" 2> /dev/null || continue
