@@ -7,3 +7,13 @@ not open a public issue for it.
 
 A report helps most when it says what is affected (loader, a mod, the
 server image), which versions, and how to reproduce it.
+
+## Check a download
+
+Every archive, PDB and SBOM our builds publish carries a build provenance
+attestation. With the [GitHub CLI](https://cli.github.com), this checks
+that a file was built by the organization's workflows from its repository:
+
+```bash
+gh attestation verify enshwick.zip --owner enshwick --signer-repo enshwick/.github
+```
