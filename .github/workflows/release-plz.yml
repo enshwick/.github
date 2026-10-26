@@ -1,0 +1,79 @@
+name: release-plz
+
+# Versions, changelogs and releases from conventional commits, run by hand on
+# the organization runners. `release-pr` opens or updates the release pull
+# request and then starts the caller's CI on its branch: a pull request opened
+# with GITHUB_TOKEN starts no workflow, but a dispatch does, and the checks
+# attach to the branch's commit. `release` tags each released package, makes
+# its GitHub release and publishes crates through crates.io trusted
+# publishing; it acts only when the newest commit on main is a merged release
+# pull request (`release_always = false` in the caller's release-plz.toml).
+# The caller grants the job's permissions.
+
+on:
+  workflow_call:
+    inputs:
+      command:
+        description: release-pr or release.
+        type: string
+        required: true
+      ci:
+        description: The caller's workflow file that release-pr starts on the release branch.
+        type: string
+        default: ci.yml
+    outputs:
+      releases:
+        description: release-plz's `releases` output, a JSON array of package_name, version and tag.
+        value: ${{ jobs.release-plz.outputs.releases }}
+
+permissions: {}
+
+jobs:
+  release-plz:
+    if: inputs.command == 'release-pr' || inputs.command == 'release'
+    runs-on: enshwick
+    timeout-minutes: 30
+    permissions:
+      # Push the release branch and tags, make releases.
+      contents: write
+      pull-requests: write
+      # Start the caller's CI on the release branch.
+      actions: write
+      # crates.io trusted publishing.
+      id-token: write
+    concurrency:
+      group: release-plz-${{ github.repository }}
+      cancel-in-progress: false
+    outputs:
+      releases: ${{ steps.release-plz.outputs.releases }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Checked out and used by path, as in rust-ci.yml.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: enshwick/.github
+          ref: main
+          path: .enshwick-ci
+          persist-credentials: false
+      - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
+        with:
+          gh: true
+
+      - id: release-plz
+        uses: release-plz/action@8921286633dfa0c4020f7f30bd1c14fe19cbb10e # v0.5.142
+        with:
+          command: ${{ inputs.command }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Start CI on the release branch
+        if: inputs.command == 'release-pr' && steps.release-plz.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ fromJSON(steps.release-plz.outputs.pr).head_branch }}
+          CI: ${{ inputs.ci }}
+        run: gh workflow run "$CI" --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
