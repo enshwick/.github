@@ -1,6 +1,7 @@
 # The organization runners' image: GitHub's actions-runner with what every
 # Rust job would otherwise install at its start: the apt packages, the cargo
-# tools at the versions the shared workflows ask for, and a Wine prefix.
+# tools at the versions the shared workflows ask for (cargo-xwin, sccache,
+# cargo-nextest, cargo-deny, cargo-cyclonedx, cargo-auditable), and a Wine prefix.
 # Rust and the Windows SDK stay in the runners' persistent tool cache, where
 # setup-rust finds them without a download and keeps them current.
 FROM ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
@@ -44,6 +45,10 @@ RUN set -eu; \
       https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz cargo-deny; \
     tool cargo-cyclonedx 0.5.9 9bd3e599314f50810c9d98b8b68a617ff9d3cc20873968d90b29d121f6b226ff \
       https://github.com/CycloneDX/cyclonedx-rust-cargo/releases/download/cargo-cyclonedx-0.5.9/cargo-cyclonedx-x86_64-unknown-linux-musl.tar.xz cargo-cyclonedx; \
+    tool cargo-auditable 0.7.7 7676443367c5e33d9fb22acef63cccb5e9202de12dae1b0579995eb3e2bc7a18 \
+      https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.7/cargo-auditable-x86_64-unknown-linux-musl.tar.xz cargo-auditable; \
+    # cargo-auditable only wraps cargo, which lives in the tool cache.
+    test -x /usr/local/bin/cargo-auditable; \
     for t in cargo-xwin sccache cargo-nextest cargo-deny cargo-cyclonedx; do "/usr/local/bin/$t" --version > /dev/null 2>&1 || "/usr/local/bin/$t" "${t#cargo-}" --version; done
 
 USER runner

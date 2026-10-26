@@ -1,7 +1,7 @@
 name: Runner image
 
 # Builds runner-image/Dockerfile and pushes it to ghcr.io/enshwick/runner,
-# tagged with the commit, with a build provenance attestation. The runner
+# tagged with the commit (and `main` from the default branch), with a build provenance attestation. The runner
 # scale set pins the image by digest; this workflow prints the digest.
 #
 # It runs on a GitHub-hosted runner: the organization runners have no
@@ -52,7 +52,10 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: false
-          tags: ghcr.io/enshwick/runner:sha-${{ github.sha }}
+          # `main` follows the default branch, for a digest pin that names it.
+          tags: |
+            ghcr.io/enshwick/runner:sha-${{ github.sha }}
+            ${{ github.ref == 'refs/heads/main' && 'ghcr.io/enshwick/runner:main' || '' }}
 
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
