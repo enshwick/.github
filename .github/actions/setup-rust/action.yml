@@ -79,6 +79,19 @@ runs:
         flock "$RUSTUP_HOME.lock" rustup toolchain install
         rustc --version
 
+    # Windows binaries link with the toolchain's own lld (rust-lld, LLVM of
+    # the pinned Rust) under the name lld-link, ahead of the distribution's
+    # older lld-link: LLVM 18's segfaulted now and then writing a large PDB.
+    - name: Link with the toolchain's lld
+      shell: bash
+      run: | # zizmor: ignore[github-env] fixed paths only
+        lld="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin/rust-lld"
+        test -x "$lld"
+        mkdir -p "$RUNNER_TEMP/lld"
+        ln -sf "$lld" "$RUNNER_TEMP/lld/lld-link"
+        echo "$RUNNER_TEMP/lld" >> "$GITHUB_PATH"
+        "$lld" -flavor link --version
+
     # Each job installs the tools into a directory of its own: installing
     # into the shared cache would overwrite a binary a concurrent job is
     # running ("text file busy"). The prebuilt downloads take seconds.
