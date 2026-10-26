@@ -1,0 +1,76 @@
+name: Set up Rust
+description: >-
+  Rust from rust-toolchain.toml, cargo-xwin for the Windows target and
+  sccache, kept in the runners' persistent tool cache.
+
+inputs:
+  tools:
+    description: More tools for taiki-e/install-action, comma-separated (cargo-nextest,cargo-deny).
+    default: ""
+  wine:
+    description: Install Wine to run Windows test executables.
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Point caches at the tool cache
+      shell: bash
+      run: | # zizmor: ignore[github-env] fixed paths only
+
+        cache="${RUNNER_TOOL_CACHE:-$HOME/.cache}"
+        {
+          echo "RUSTUP_HOME=$cache/rustup"
+          echo "CARGO_HOME=$cache/cargo"
+          echo "XWIN_CACHE_DIR=$cache/xwin"
+          echo "CARGO_INCREMENTAL=0"
+          echo "CARGO_TERM_COLOR=always"
+        } >> "$GITHUB_ENV"
+        echo "$cache/cargo/bin" >> "$GITHUB_PATH"
+        if [ -d /ci-cache/sccache ] && [ -w /ci-cache/sccache ]; then
+          {
+            echo "SCCACHE_DIR=/ci-cache/sccache"
+            echo "SCCACHE_CACHE_SIZE=15G"
+            echo "RUSTC_WRAPPER=sccache"
+          } >> "$GITHUB_ENV"
+        fi
+
+    # The stock runner image has no C toolchain; cargo-xwin needs clang and
+    # lld. Downloaded packages stay in the tool cache between jobs.
+    - name: Install clang, lld and Wine
+      shell: bash
+      env:
+        WINE: ${{ inputs.wine }}
+      run: |
+        packages=(clang lld)
+        if [ "$WINE" = true ]; then packages+=(wine64); fi
+        missing=()
+        for package in "${packages[@]}"; do
+          dpkg -s "$package" > /dev/null 2>&1 || missing+=("$package")
+        done
+        if [ ${#missing[@]} -gt 0 ]; then
+          archives="${RUNNER_TOOL_CACHE:-$HOME/.cache}/apt"
+          mkdir -p "$archives/partial"
+          sudo apt-get -o Dir::Cache::archives="$archives" update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Cache::archives="$archives" \
+            install -y -qq --no-install-recommends "${missing[@]}"
+        fi
+        if [ "$WINE" = true ]; then
+          command -v wine > /dev/null || sudo ln -s "$(command -v wine64)" /usr/local/bin/wine
+          WINEDEBUG=-all wineboot -i > /dev/null 2>&1 || true
+          echo "WINEDEBUG=-all" >> "$GITHUB_ENV"
+        fi
+
+    - name: Install the toolchain
+      shell: bash
+      run: |
+        if ! command -v rustup > /dev/null; then
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain none --no-modify-path
+        fi
+        rustup toolchain install
+        rustc --version
+
+    - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+      with:
+        tool: cargo-xwin,sccache${{ inputs.tools != '' && format(',{0}', inputs.tools) || '' }}
