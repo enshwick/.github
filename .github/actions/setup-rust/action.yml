@@ -35,6 +35,9 @@ runs:
             echo "SCCACHE_DIR=/ci-cache/sccache"
             echo "SCCACHE_CACHE_SIZE=15G"
             echo "RUSTC_WRAPPER=sccache"
+            # A lost connection to the server compiles without the cache
+            # instead of failing the build.
+            echo "SCCACHE_IGNORE_SERVER_IO_ERROR=1"
           } >> "$GITHUB_ENV"
         fi
 
