@@ -11,6 +11,10 @@ on:
         description: Run the Windows-only crates' tests under Wine.
         type: boolean
         default: true
+      semver:
+        description: Packages checked with cargo-semver-checks against their last release on crates.io, space-separated; none when empty.
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -38,7 +42,7 @@ jobs:
           persist-credentials: false
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
         with:
-          tools: cargo-nextest@0.9.149,cargo-deny@0.20.2
+          tools: cargo-nextest@0.9.149,cargo-deny@0.20.2${{ inputs.semver != '' && ',cargo-semver-checks@0.51.0' || '' }}
           wine: ${{ inputs.windows-tests }}
 
       - name: cargo xtask check
@@ -52,6 +56,17 @@ jobs:
           if [ "$WINDOWS" = true ]; then args+=(--windows); fi
           cargo fmt --all --check
           cargo xtask check "${args[@]}"
+
+      # A version that claims less change than the public API made fails;
+      # unreleased changes keep the released version and pass.
+      - name: cargo semver-checks
+        if: inputs.semver != ''
+        env:
+          PACKAGES: ${{ inputs.semver }}
+        run: |
+          args=()
+          for package in $PACKAGES; do args+=(--package "$package"); done
+          cargo semver-checks "${args[@]}"
 
       - name: sccache statistics
         if: always() && env.RUSTC_WRAPPER == 'sccache'
