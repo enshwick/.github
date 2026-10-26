@@ -2,7 +2,8 @@ name: Docs rebuild
 
 # Starts the docs site's build on enshwick/docs, so a change to the platform's
 # book or a mod's player page shows on the site without waiting for its
-# nightly run. Called after a push to main and after a dev build. The site
+# nightly run. Called after the platform's pushes to main and after dev
+# builds, since the site reads a mod's page from its newest release. The site
 # workflow cancels a build in progress on main when a newer one starts, so a
 # burst of calls ends in one build of the newest sources.
 
