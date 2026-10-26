@@ -1,0 +1,58 @@
+name: Bun CI
+
+# The merge gate of a repository whose product is JavaScript on Bun: a frozen
+# install, then `bun run check`, which formats, lints, type-checks and tests.
+# With `artifact` set, `bun run build` follows and the folder it writes is
+# uploaded as the run's artifact of that name. Nothing is released.
+
+on:
+  workflow_call:
+    inputs:
+      artifact:
+        description: Name of the build artifact; no build when empty.
+        type: string
+        default: ""
+      artifact-path:
+        description: The folder `bun run build` writes, uploaded as the artifact.
+        type: string
+        default: dist
+
+permissions: {}
+
+jobs:
+  check:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: enshwick
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      # Packages land in the runner's tool cache, which every job on it shares.
+      # No install scripts: they would only set up local git hooks.
+      - name: bun install
+        env:
+          BUN_INSTALL_CACHE_DIR: ${{ runner.tool_cache }}/bun-install-cache
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: bun run check
+        run: bun run check
+
+      - name: bun run build
+        if: inputs.artifact != ''
+        run: bun run build
+
+      - name: Upload the build
+        if: inputs.artifact != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.artifact }}
+          path: ${{ inputs.artifact-path }}
+          if-no-files-found: error
