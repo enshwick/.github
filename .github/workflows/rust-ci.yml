@@ -131,8 +131,11 @@ jobs:
       BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
       FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
       PART: ${{ matrix.part }}
+      # The Windows lint runs on the owner's PC while it is online.
+      ON_PC: ${{ matrix.part == 'windows-lint' && needs.windows-gate.outputs.native == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.ON_PC != 'true'
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -141,6 +144,7 @@ jobs:
       # pinned by SHA, and actionlint cannot read the `$/` form yet. From
       # main, the only ref the runners run workflows from.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.ON_PC != 'true'
         with:
           repository: enshwick/.github
           ref: main
@@ -148,35 +152,37 @@ jobs:
           persist-credentials: false
 
       - name: Fetch the base
+        if: env.ON_PC != 'true'
         run: git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
 
       # On a GitHub-hosted runner nothing persists between jobs: the
       # toolchain, the Windows SDK and the Wine packages come from the cache.
-      - if: runner.environment == 'github-hosted'
+      - if: env.ON_PC != 'true' && (runner.environment == 'github-hosted')
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ${{ runner.tool_cache }}/rustup
           key: rustup-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
       # The Windows SDK and CRT cargo-xwin downloads, about 12 minutes from
       # Microsoft on a hosted runner; only the Windows parts fill it.
-      - if: runner.environment == 'github-hosted' && matrix.part != 'host'
+      - if: env.ON_PC != 'true' && (runner.environment == 'github-hosted' && matrix.part != 'host')
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ${{ runner.tool_cache }}/xwin
           key: xwin-${{ runner.os }}-0.23.1-v1
-      - if: runner.environment == 'github-hosted' && matrix.part != 'host'
+      - if: env.ON_PC != 'true' && (runner.environment == 'github-hosted' && matrix.part != 'host')
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ${{ runner.tool_cache }}/apt-archives
           key: apt-${{ runner.os }}-${{ matrix.part }}-v1
 
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
+        if: env.ON_PC != 'true'
         with:
           tools: cargo-nextest@0.9.149,cargo-deny@0.20.2${{ inputs.semver != '' && matrix.part != 'windows-lint' && ',cargo-semver-checks@0.51.0' || '' }}
           wine: ${{ matrix.part == 'all' && inputs.windows-tests }}
 
       # The build itself, per part: each job builds a different target.
-      - if: runner.environment == 'github-hosted'
+      - if: env.ON_PC != 'true' && (runner.environment == 'github-hosted')
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # A cache saved by a failed run would be restored as it is and
@@ -185,6 +191,7 @@ jobs:
           key: ${{ matrix.part }}
 
       - name: cargo xtask check
+        if: env.ON_PC != 'true'
         env:
           WINDOWS: ${{ inputs.windows-tests }}
         run: |
@@ -201,7 +208,7 @@ jobs:
       # A version that claims less change than the public API made fails;
       # unreleased changes keep the released version and pass.
       - name: cargo semver-checks
-        if: inputs.semver != '' && (matrix.part == 'all' || matrix.part == 'host')
+        if: env.ON_PC != 'true' && (inputs.semver != '' && (matrix.part == 'all' || matrix.part == 'host'))
         env:
           PACKAGES: ${{ inputs.semver }}
         run: |
@@ -210,7 +217,7 @@ jobs:
           cargo semver-checks "${args[@]}"
 
       - name: sccache statistics
-        if: always() && env.RUSTC_WRAPPER == 'sccache'
+        if: env.ON_PC != 'true' && (always() && env.RUSTC_WRAPPER == 'sccache')
         run: command -v sccache > /dev/null && sccache --show-stats || true
 
   # The Windows tests (with `split`) run natively on the owner's PC when one
