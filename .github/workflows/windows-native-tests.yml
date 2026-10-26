@@ -49,6 +49,14 @@ jobs:
       run:
         shell: bash
     env:
+      # Git settings for this job only: the ten runners share one user
+      # profile, and writing its global config at once fails on the lock.
+      # Long paths for the work tree; no CRLF, which rustfmt rejects.
+      GIT_CONFIG_COUNT: "2"
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: "true"
+      GIT_CONFIG_KEY_1: core.autocrlf
+      GIT_CONFIG_VALUE_1: "false"
       CARGO_BUILD_JOBS: "3"
       NIGHTLY: nightly-2026-10-26
     steps:
@@ -60,13 +68,6 @@ jobs:
             enshwick/*) ;;
             *) echo "::error::only enshwick/* repositories"; exit 1 ;;
           esac
-
-      - name: Git settings
-        run: |
-          git config --global core.longpaths true
-          # Git for Windows checks out with CRLF; rustfmt wants the files as
-          # committed.
-          git config --global core.autocrlf false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
