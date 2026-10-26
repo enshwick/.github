@@ -1,0 +1,64 @@
+name: Publish crates
+
+# Publishes the caller's crates to crates.io, in the order given, each only
+# when crates.io does not have its version yet, so a run that stopped half
+# way is run again as it is.
+
+on:
+  workflow_call:
+    inputs:
+      packages:
+        description: Packages to publish, separated by spaces, each after the ones it depends on
+        required: true
+        type: string
+    secrets:
+      CRATES_IO_TOKEN:
+        required: true
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: enshwick
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install rustup
+        run: |
+          command -v rustup || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          # The sparse index path of a crate name: 1/, 2/, 3/<first>/ or
+          # <first two>/<next two>/, lower case.
+          index_path() {
+            local name=${1,,}
+            case ${#name} in
+              1) echo "1/$name" ;;
+              2) echo "2/$name" ;;
+              3) echo "3/${name:0:1}/$name" ;;
+              *) echo "${name:0:2}/${name:2:2}/$name" ;;
+            esac
+          }
+          read -r -a packages <<< "$PACKAGES"
+          for package in "${packages[@]}"; do
+            # `cargo pkgid` ends in `#<name>@<version>`, or `#<version>`.
+            version=$(cargo pkgid --locked -p "$package")
+            version=${version##*[#@]}
+            if curl -fsS "https://index.crates.io/$(index_path "$package")" 2>/dev/null |
+              grep -qF "\"vers\":\"$version\""; then
+              echo "$package $version is on crates.io already"
+              continue
+            fi
+            cargo publish --locked -p "$package"
+          done
