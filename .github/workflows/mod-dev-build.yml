@@ -1,10 +1,11 @@
 name: Mod dev build
 
 # A mod's development build of the commit it runs on, until the first public
-# release, 1.0.0: the release DLL and its PDB replace the files of the
-# caller's single prerelease `dev`, whose tag moves to the commit. The
-# platform's dev bundle picks the DLL up from there. The caller grants
-# `contents: write`.
+# release, 1.0.0: `cargo xtask dist` writes `<package>.zip`, which holds
+# `mods/<package>.dll` and the license, and the PDB; they replace the files
+# of the caller's single prerelease `dev`, whose tag moves to the commit.
+# Players download the zip, and the platform's dev bundle takes it from
+# there. The caller grants `contents: write`.
 
 on:
   workflow_call:
@@ -32,11 +33,8 @@ jobs:
           persist-credentials: false
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
 
-      - name: Build
-        run: |
-          cargo xwin build --release --locked --target x86_64-pc-windows-msvc
-          mkdir -p "$RUNNER_TEMP/dev"
-          cp target/x86_64-pc-windows-msvc/release/*.dll target/x86_64-pc-windows-msvc/release/*.pdb "$RUNNER_TEMP/dev/"
+      - name: cargo xtask dist
+        run: cargo xtask dist --out "$RUNNER_TEMP/dev"
 
       - name: Publish
         env:
@@ -47,8 +45,8 @@ jobs:
           title="Dev $short"
           notes="Development build of $GITHUB_SHA: $(git -C "$GITHUB_WORKSPACE" log -1 --format=%s).
 
-          Until the first public release, 1.0.0, this prerelease is the only build to download; every run replaces it. Put the DLL into the game's mods folder, next to the Enshwick loader."
-          assets=(*.dll *.pdb)
+          Until the first public release, 1.0.0, this prerelease is the only build to download; every run replaces it. Extract the zip into the folder that holds the Enshwick loader."
+          assets=(*.zip *.pdb)
           if gh release view dev --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/dev" -f sha="$GITHUB_SHA" -F force=true > /dev/null
             gh release edit dev --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$title" --notes "$notes" --prerelease --latest=false
