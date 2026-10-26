@@ -49,11 +49,16 @@ runs:
           dpkg -s "$package" > /dev/null 2>&1 || missing+=("$package")
         done
         if [ ${#missing[@]} -gt 0 ]; then
-          archives="${RUNNER_TOOL_CACHE:-$HOME/.cache}/apt"
-          mkdir -p "$archives/partial"
-          sudo apt-get -o Dir::Cache::archives="$archives" update -qq
+          # Concurrent jobs share the cache, so apt works in a directory of
+          # its own (it locks it) and the packages are copied in and out.
+          shared="${RUNNER_TOOL_CACHE:-$HOME/.cache}/apt-archives"
+          archives="$RUNNER_TEMP/apt"
+          mkdir -p "$shared" "$archives/partial"
+          cp -n "$shared"/*.deb "$archives"/ 2> /dev/null || true
+          sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Cache::archives="$archives" \
             install -y -qq --no-install-recommends "${missing[@]}"
+          cp -n "$archives"/*.deb "$shared"/ 2> /dev/null || true
         fi
         if [ "$WINE" = true ]; then
           WINEDEBUG=-all wineboot -i > /dev/null 2>&1 || true
