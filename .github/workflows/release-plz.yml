@@ -63,6 +63,11 @@ jobs:
         with:
           gh: true
 
+      # release-plz refuses a working tree with changes; the shared actions'
+      # checkout is one.
+      - name: Keep the shared actions out of the working tree
+        run: echo /.enshwick-ci/ >> .git/info/exclude
+
       - id: release-plz
         uses: release-plz/action@8921286633dfa0c4020f7f30bd1c14fe19cbb10e # v0.5.142
         with:
@@ -74,6 +79,8 @@ jobs:
         if: inputs.command == 'release-pr' && steps.release-plz.outputs.prs_created == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          BRANCH: ${{ fromJSON(steps.release-plz.outputs.pr).head_branch }}
+          PR: ${{ steps.release-plz.outputs.pr }}
           CI: ${{ inputs.ci }}
-        run: gh workflow run "$CI" --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
+        run: |
+          branch=$(jq -r .head_branch <<< "$PR")
+          gh workflow run "$CI" --repo "$GITHUB_REPOSITORY" --ref "$branch"
