@@ -1,0 +1,78 @@
+name: Queue nudge
+
+# Puts into the merge queue each open pull request that has auto-merge on,
+# is mergeable with every required check green for ten minutes, and still
+# sits outside the queue. GitHub now and then leaves such a pull request
+# waiting until someone switches auto-merge off and on. Each nudge is
+# logged. It runs on a GitHub-hosted runner: it only calls the API.
+
+on:
+  workflow_call:
+    secrets:
+      ENSHWICK_CI_CLIENT_ID:
+        required: true
+      ENSHWICK_CI_PRIVATE_KEY:
+        required: true
+
+permissions: {}
+
+jobs:
+  nudge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      # The app enqueues, so the queue's runs start as for a person.
+      - name: Mint the enshwick-ci token
+        id: token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.ENSHWICK_CI_CLIENT_ID }}
+          private-key: ${{ secrets.ENSHWICK_CI_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Enqueue stuck pull requests
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          owner=${GITHUB_REPOSITORY%/*}
+          name=${GITHUB_REPOSITORY#*/}
+          # shellcheck disable=SC2016
+          query='query($owner: String!, $name: String!) {
+            repository(owner: $owner, name: $name) {
+              pullRequests(states: OPEN, first: 50) {
+                nodes {
+                  id number isDraft isInMergeQueue mergeStateStatus
+                  autoMergeRequest { enabledAt }
+                  commits(last: 1) { nodes { commit { statusCheckRollup {
+                    state
+                    contexts(first: 100) { nodes { ... on CheckRun { name completedAt } } }
+                  } } } }
+                }
+              }
+            }
+          }'
+          gh api graphql -f query="$query" -f owner="$owner" -f name="$name" > "$RUNNER_TEMP/prs.json"
+          cutoff=$(date -u -d '10 minutes ago' +%FT%TZ)
+          jq -r --arg cutoff "$cutoff" '
+            .data.repository.pullRequests.nodes[]
+            | select(.autoMergeRequest != null and (.isDraft | not) and (.isInMergeQueue | not))
+            # GitHub computes the state lazily and often reports UNKNOWN; the
+            # queue refuses a pull request that cannot merge.
+            | select(.mergeStateStatus == "CLEAN" or .mergeStateStatus == "HAS_HOOKS" or .mergeStateStatus == "UNKNOWN")
+            | .commits.nodes[0].commit.statusCheckRollup as $checks
+            | select($checks.state == "SUCCESS")
+            | select([$checks.contexts.nodes[] | select(.completedAt != null) | .completedAt] | max < $cutoff)
+            | "\(.id) \(.number)"' "$RUNNER_TEMP/prs.json" > "$RUNNER_TEMP/stuck.txt"
+          if [ ! -s "$RUNNER_TEMP/stuck.txt" ]; then
+            echo "nothing waits outside the queue"
+            exit 0
+          fi
+          while read -r id number; do
+            echo "::notice::pull request #$number was green with auto-merge on but outside the queue; enqueuing it"
+            # shellcheck disable=SC2016
+            gh api graphql -f query='mutation($id: ID!) { enqueuePullRequest(input: {pullRequestId: $id}) { mergeQueueEntry { position } } }' \
+              -f id="$id" --jq '.data.enqueuePullRequest.mergeQueueEntry.position' \
+              || echo "::warning::#$number could not be enqueued"
+          done < "$RUNNER_TEMP/stuck.txt"
