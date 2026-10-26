@@ -31,6 +31,16 @@
       "groupName": "GitHub Actions"
     },
     {
+      "description": "The shared workflows and actions of enshwick/.github stay on main: the organization runners accept only workflows from main, so a pin to a commit would stop the jobs.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "enshwick/.github"
+      ],
+      "enabled": false
+    },
+    {
       "matchPackageNames": [
         "/^wasmtime/"
       ],
