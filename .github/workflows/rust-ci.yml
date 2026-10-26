@@ -55,12 +55,15 @@ jobs:
       - name: What is left to prove
         id: scope
         env:
-          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
+          # A merge queue entry is checked against the entry before it (its
+          # group's parent): only its own pull request's changes are new.
+          BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
           EVENT: ${{ github.event_name }}
           FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
           HEAD_REF: ${{ github.event.merge_group.head_ref }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
           reason=""
           if [ "$EVENT" = merge_group ]; then
             number=$(sed -nE 's|.*/pr-([0-9]+)-[0-9a-f]+$|\1|p' <<< "$HEAD_REF")
@@ -93,7 +96,9 @@ jobs:
       - name: cargo xtask check
         if: steps.scope.outputs.skip == ''
         env:
-          BASE: origin/${{ github.base_ref || github.event.repository.default_branch }}
+          # A merge queue entry is checked against the entry before it (its
+          # group's parent): only its own pull request's changes are new.
+          BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
           # A merge queue group gets the fast lane too: the changes of its
           # pull requests on top of main.
           FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
