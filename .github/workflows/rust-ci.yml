@@ -3,11 +3,10 @@ name: Rust CI
 # `cargo xtask check` for a pull request, a merge queue entry, a push to main
 # or the nightly run. Pull requests, pushes and the nightly run use
 # GitHub-hosted runners, with the toolchain, the Windows SDK and the build
-# cached between runs; merge queue entries use the organization runners, so
-# the queue never waits behind pull requests. With `split` the check runs as
-# parallel jobs (host, Windows lint, Windows tests), and the Windows tests
-# run on the organization runners only, outside pull requests. The job
-# `check` sums them up and is the required check.
+# cached between runs. With `split` the check runs as parallel jobs (host,
+# Windows lint, Windows tests); the Windows tests run on the organization
+# runners, and only outside pull requests. The job `check` sums them up and
+# is the required check.
 
 on:
   workflow_call:
@@ -101,12 +100,12 @@ jobs:
   part:
     needs: scope
     if: needs.scope.outputs.skip == ''
-    # Pull requests run on GitHub-hosted runners. The merge queue and the
-    # Windows tests outside pull requests run on the organization runners:
-    # under Wine, one test of the loader's hooks depends on the CPU and
-    # fails on GitHub's machines, so pull requests leave the Windows tests
-    # to the merge queue.
-    runs-on: ${{ (github.event_name == 'merge_group' || matrix.part == 'windows-tests') && 'enshwick' || 'ubuntu-24.04' }}
+    # Every part runs on GitHub-hosted runners but the Windows tests, which
+    # run on the organization runners outside pull requests: under Wine, one
+    # test of the loader's hooks depends on the CPU and fails on GitHub's
+    # machines. So a merge queue entry takes one organization runner, and
+    # only when a package with Windows tests changed.
+    runs-on: ${{ matrix.part == 'windows-tests' && 'enshwick' || 'ubuntu-24.04' }}
     timeout-minutes: 45
     permissions:
       contents: read
