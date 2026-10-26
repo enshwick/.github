@@ -1,0 +1,93 @@
+name: Copier template
+
+# Renders the caller's copier template with each set of answers in `render`
+# and checks the result: the answers file holds them, `src/lib.rs` names the
+# mod's id and a Rust type. Each answer in `refuse` must be refused by the
+# template's validators. Nothing is compiled.
+
+on:
+  workflow_call:
+    inputs:
+      render:
+        description: Answers that must render, one `key=value` set per line, sets of several keys separated by spaces.
+        type: string
+        required: true
+      refuse:
+        description: Answers the template must refuse, one `key=value` set per line.
+        type: string
+        default: ""
+
+permissions: {}
+
+jobs:
+  render:
+    runs-on: enshwick
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # uv runs copier; the checked release stays in the tool cache.
+      - name: Install uv
+        env:
+          UV_VERSION: 0.12.24
+          UV_SHA256: b4dfaef47d491a7296981f8374a4595f55dbf84e8937c8ecd2983574d8bb3da6
+        run: | # zizmor: ignore[github-env] fixed paths only
+          dir="${RUNNER_TOOL_CACHE:-$HOME/.cache}/uv/$UV_VERSION"
+          if [ ! -x "$dir/uv" ]; then
+            archive="$RUNNER_TEMP/uv.tar.gz"
+            curl --proto '=https' --tlsv1.2 -sSfL -o "$archive" \
+              "https://github.com/astral-sh/uv/releases/download/$UV_VERSION/uv-x86_64-unknown-linux-gnu.tar.gz"
+            echo "$UV_SHA256  $archive" | sha256sum -c -
+            staging="$(dirname "$dir")/.staging-$GITHUB_RUN_ID-$GITHUB_JOB-$$"
+            mkdir -p "$staging"
+            tar -xzf "$archive" -C "$staging" --strip-components 1
+            mv -T "$staging" "$dir" 2> /dev/null || rm -rf "$staging"
+          fi
+          echo "$dir" >> "$GITHUB_PATH"
+          echo "UV_CACHE_DIR=${RUNNER_TOOL_CACHE:-$HOME/.cache}/uv-cache" >> "$GITHUB_ENV"
+
+      - name: Render and check
+        env:
+          RENDER: ${{ inputs.render }}
+          REFUSE: ${{ inputs.refuse }}
+        run: |
+          copier() { uvx --quiet copier@9.19.1 copy --quiet --trust --defaults --vcs-ref HEAD "$@"; }
+          failed=0
+          n=0
+          while IFS= read -r answers; do
+            [ -n "$answers" ] || continue
+            n=$((n + 1))
+            out="$RUNNER_TEMP/render-$n"
+            args=()
+            for pair in $answers; do args+=(-d "$pair"); done
+            if ! copier "${args[@]}" . "$out" > /dev/null; then
+              echo "::error::$answers did not render"; failed=1; continue
+            fi
+            for pair in $answers; do
+              grep -qxF "${pair%%=*}: ${pair#*=}" "$out/.copier-answers.yml" ||
+                { echo "::error::$answers: the answers file lacks $pair"; failed=1; }
+            done
+            id=$(sed -n 's/^mod_id: //p' "$out/.copier-answers.yml")
+            if [ -n "$id" ] && [ -f "$out/src/lib.rs" ]; then
+              grep -qF "id: \"$id\"" "$out/src/lib.rs" || { echo "::error::$answers: src/lib.rs does not name $id"; failed=1; }
+              grep -qE '^pub struct [A-Z][A-Za-z0-9]*;' "$out/src/lib.rs" || { echo "::error::$answers: src/lib.rs names no Rust type"; failed=1; }
+            fi
+            echo "rendered: $answers"
+          done <<< "$RENDER"
+          while IFS= read -r answers; do
+            [ -n "$answers" ] || continue
+            n=$((n + 1))
+            args=()
+            for pair in $answers; do args+=(-d "$pair"); done
+            if copier "${args[@]}" . "$RUNNER_TEMP/render-$n" > /dev/null 2>&1; then
+              echo "::error::$answers rendered but must be refused"; failed=1
+            else
+              echo "refused: $answers"
+            fi
+          done <<< "$REFUSE"
+          exit "$failed"
