@@ -48,7 +48,7 @@ permissions: {}
 
 jobs:
   scope:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -116,7 +116,7 @@ jobs:
   part:
     needs: [scope, windows-gate]
     if: always() && needs.scope.result == 'success' && needs.scope.outputs.skip == ''
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -159,19 +159,19 @@ jobs:
       # On a GitHub-hosted runner nothing persists between jobs: the
       # toolchain, the Windows SDK and the Wine packages come from the cache.
       - if: env.ON_PC != 'true' && (runner.environment == 'github-hosted')
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/rustup
           key: rustup-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
       # The Windows SDK and CRT cargo-xwin downloads, about 12 minutes from
       # Microsoft on a hosted runner; only the Windows parts fill it.
       - if: env.ON_PC != 'true' && (runner.environment == 'github-hosted' && matrix.part != 'host')
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/xwin
           key: xwin-${{ runner.os }}-0.23.1-v1
       - if: env.ON_PC != 'true' && (runner.environment == 'github-hosted' && matrix.part != 'host')
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/apt-archives
           key: apt-${{ runner.os }}-${{ matrix.part }}-v1
@@ -228,7 +228,7 @@ jobs:
   windows-gate:
     needs: scope
     if: needs.scope.outputs.skip == ''
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 3
     permissions: {}
     outputs:
@@ -500,7 +500,7 @@ jobs:
   check:
     needs: [scope, part, windows-gate, windows-lint-native, all-native, windows-native, windows-wine]
     if: always()
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 2
     permissions: {}
     steps:
