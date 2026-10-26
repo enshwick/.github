@@ -40,6 +40,9 @@ runs:
           echo "XWIN_CACHE_DIR=$cache/xwin"
           echo "SCCACHE_DIR=$cache/sccache"
           echo "SCCACHE_CACHE_SIZE=20G"
+          # One sccache server per runner: on the shared default port one
+          # job's server going away dropped another job's compiles.
+          echo "SCCACHE_SERVER_PORT=$((4300 + $(printf '%s' "$RUNNER_NAME" | cksum | cut -d' ' -f1) % 1000))"
           echo "CARGO_INCREMENTAL=0"
           # The PC's network breaks cargo's HTTP/2 streams now and then.
           echo "CARGO_HTTP_MULTIPLEXING=false"
