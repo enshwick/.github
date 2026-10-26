@@ -123,6 +123,15 @@ jobs:
             # A test executable that does not start names the DLLs it lacks.
             if [ "$ASAN" = true ]; then
               echo "runtime: ${runtime:-none}"
+              echo "flags: $CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS"
+              objdump="$(rustc --print sysroot)/lib/rustlib/x86_64-pc-windows-msvc/bin/llvm-objdump.exe"
+              dll="$runtime/clang_rt.asan_dynamic-x86_64.dll"
+              "$objdump" -p "$dll" | sed -n '/Export Table/,$p' | awk '{print $NF}' | sort -u > "$RUNNER_TEMP/exports"
+              for exe in $(find target/x86_64-pc-windows-msvc -name '*.exe' -path '*/out/*' -newer Cargo.toml); do
+                # What the test takes from the runtime that the runtime lacks.
+                "$objdump" -p "$exe" | awk '/DLL Name:/{d=$3} d ~ /clang_rt/ && /^ +[0-9]+ +[A-Za-z_]/{print $2}' |
+                  sort -u | comm -23 - "$RUNNER_TEMP/exports" | sed 's/^/missing from the runtime: /'
+              done
               find target/x86_64-pc-windows-msvc -name '*.exe' -path '*/out/*' -newer Cargo.toml -exec ldd {} \; || true
             fi
             exit 1
