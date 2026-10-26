@@ -1,0 +1,73 @@
+name: Organization check
+
+# Once a week: every public repository's settings and `main` ruleset, its
+# shared configuration against template-mod and whether its template is
+# behind (scripts/org-check.sh). The findings go into one open issue here,
+# which closes once nothing is left.
+
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: org-check
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: github.repository == 'enshwick/.github'
+    runs-on: enshwick
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Merge settings are visible only to a token with Administration read
+      # access; without it the check says so instead of guessing.
+      - name: Mint the enshwick-ci token
+        id: token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.ENSHWICK_CI_CLIENT_ID }}
+          private-key: ${{ secrets.ENSHWICK_CI_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }} # zizmor: ignore[github-app]
+          permission-contents: read
+
+      - uses: ./.github/actions/setup-rust # zizmor: ignore[self-repository]
+        with:
+          gh: true
+
+      - name: Check every repository
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: scripts/org-check.sh "$GITHUB_REPOSITORY_OWNER" "$RUNNER_TEMP/org-check" > "$RUNNER_TEMP/findings.md"
+
+      - name: Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: Weekly organization check
+        run: |
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" \
+            --json number --jq '.[0].number // empty')
+          if [ ! -s "$RUNNER_TEMP/findings.md" ]; then
+            [ -z "$open" ] || gh issue close "$open" --repo "$GITHUB_REPOSITORY" --comment "Nothing left on $(date -u +%F)."
+            exit 0
+          fi
+          {
+            echo "What the organization's repositories differ in from their standard settings and the shared configuration, on $(date -u +%F):"
+            echo
+            cat "$RUNNER_TEMP/findings.md"
+          } > "$RUNNER_TEMP/body.md"
+          cat "$RUNNER_TEMP/body.md" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$open" ]; then
+            gh issue edit "$open" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file "$RUNNER_TEMP/body.md"
+          fi
