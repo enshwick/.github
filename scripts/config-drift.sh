@@ -31,16 +31,12 @@ fi
 
 # shellcheck disable=SC2016 # $schema is a JSON key, not a variable
 expected='{"$schema":"https://docs.renovatebot.com/renovate-schema.json","extends":["github>enshwick/.github//renovate/default"]}'
-# shellcheck disable=SC2016
-former='{"$schema":"https://docs.renovatebot.com/renovate-schema.json","extends":["github>enshwick/renovate-config"]}'
 if [ ! -f "$repo/renovate.json" ]; then
   echo "renovate.json: missing"
   found=1
 else
   actual=$(jq -cS . "$repo/renovate.json")
-  if [ "$actual" = "$(jq -cS . <<< "$former")" ]; then
-    echo "renovate.json: extends the retired github>enshwick/renovate-config; extend github>enshwick/.github//renovate/default"
-  elif [ "$actual" != "$(jq -cS . <<< "$expected")" ]; then
+  if [ "$actual" != "$(jq -cS . <<< "$expected")" ]; then
     echo "renovate.json: does more than extend github>enshwick/.github//renovate/default"
     found=1
   fi
