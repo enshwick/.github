@@ -132,7 +132,8 @@ jobs:
       FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
       PART: ${{ matrix.part }}
       # The Windows lint runs on the owner's PC while it is online.
-      ON_PC: ${{ matrix.part == 'windows-lint' && needs.windows-gate.outputs.native == 'true' }}
+      # Without `split`, the whole check runs there.
+      ON_PC: ${{ (matrix.part == 'windows-lint' || matrix.part == 'all') && needs.windows-gate.outputs.native == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.ON_PC != 'true'
@@ -226,7 +227,7 @@ jobs:
   # one loader test depends on the CPU and fails on GitHub's machines.
   windows-gate:
     needs: scope
-    if: inputs.split && needs.scope.outputs.skip == ''
+    if: needs.scope.outputs.skip == ''
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     permissions: {}
@@ -300,6 +301,59 @@ jobs:
           args=(--target x86_64-pc-windows-msvc --workspace --all-targets)
           if [ -n "$FEATURES" ]; then args+=(--features "$FEATURES"); fi
           cargo clippy "${args[@]}" -- -D warnings
+
+      - name: Clean up
+        if: always()
+        run: rm -rf target
+
+  # Without `split`, the whole check on the owner's PC while it is online:
+  # on Windows `cargo xtask check` builds and tests every package natively.
+  all-native:
+    needs: [scope, windows-gate]
+    if: ${{ !inputs.split && needs.windows-gate.outputs.native == 'true' }}
+    runs-on: [self-hosted, Windows, X64, enshwick-pc]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
+      FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
+      # Ten runners share one 16-core PC that is also the owner's.
+      CARGO_BUILD_JOBS: "3"
+      NEXTEST_TEST_THREADS: "3"
+    steps:
+      - name: Long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: enshwick/.github
+          ref: main
+          path: .enshwick-ci
+          persist-credentials: false
+
+      - name: Fetch the base
+        run: git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
+
+      - uses: ./.enshwick-ci/.github/actions/setup-rust-windows # zizmor: ignore[self-repository]
+
+      - name: cargo xtask check
+        run: |
+          # cargo-xwin's PATH is in Windows form and would hide bash's tools.
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep -v '^export PATH=')"
+          unset CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER
+          args=()
+          if [ "$FULL" = true ]; then args+=(--all); else args+=(--base "$BASE"); fi
+          cargo fmt --all --check
+          cargo run --quiet -p xtask -- check "${args[@]}"
 
       - name: Clean up
         if: always()
@@ -432,7 +486,7 @@ jobs:
 
   # The required check: every part passed, or there was nothing to prove.
   check:
-    needs: [scope, part, windows-gate, windows-lint-native, windows-native, windows-wine]
+    needs: [scope, part, windows-gate, windows-lint-native, all-native, windows-native, windows-wine]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -444,13 +498,14 @@ jobs:
           PART: ${{ needs.part.result }}
           GATE: ${{ needs.windows-gate.result }}
           LINT: ${{ needs.windows-lint-native.result }}
+          ALL: ${{ needs.all-native.result }}
           NATIVE: ${{ needs.windows-native.result }}
           WINE: ${{ needs.windows-wine.result }}
         run: |
-          echo "scope: $SCOPE, parts: $PART, Windows gate: $GATE, PC lint: $LINT, PC tests: $NATIVE, Wine: $WINE"
+          echo "scope: $SCOPE, parts: $PART, Windows gate: $GATE, PC lint: $LINT, PC whole check: $ALL, PC tests: $NATIVE, Wine: $WINE"
           ok() { [ "$1" = success ] || [ "$1" = skipped ]; }
           # The Windows tests passed on one path, or neither had to run.
           windows=false
           if [ "$NATIVE" = success ] || [ "$WINE" = success ]; then windows=true; fi
           if [ "$NATIVE" = skipped ] && [ "$WINE" = skipped ]; then windows=true; fi
-          [ "$SCOPE" = success ] && ok "$PART" && ok "$GATE" && ok "$LINT" && [ "$windows" = true ]
+          [ "$SCOPE" = success ] && ok "$PART" && ok "$GATE" && ok "$LINT" && ok "$ALL" && [ "$windows" = true ]
