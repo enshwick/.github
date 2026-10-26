@@ -55,4 +55,4 @@ jobs:
 
       - name: sccache statistics
         if: always() && env.RUSTC_WRAPPER == 'sccache'
-        run: sccache --show-stats
+        run: command -v sccache > /dev/null && sccache --show-stats || true
