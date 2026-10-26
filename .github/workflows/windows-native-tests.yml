@@ -103,6 +103,9 @@ jobs:
             rmdir "$lock"
             toolchain=("+$NIGHTLY")
             runtime=$(compgen -G "$(dirname "$(command -v clang-cl)")/../lib/clang/*/lib/windows" | head -n 1)
+            # By path: the CRT folder may hold Microsoft's import library of
+            # the same name, for a runtime that is not here.
+            libs=$(cygpath -m "$runtime")
             # rustc hands the MSVC linker /INFERASANLIBS and any other its own
             # runtime, which no Windows toolchain ships; lld named `link`
             # links as link.exe, and the runtime is named outright. The
@@ -113,7 +116,7 @@ jobs:
             flags=${CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS/-C linker-flavor=lld-link/}
             flags=${flags/-C link-arg=-nodefaultlib:ucrt -C link-arg=-defaultlib:libucrt/}
             export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER="$RUNNER_TEMP/asan-link/link.exe"
-            export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$flags -C linker-flavor=msvc -C target-feature=-crt-static -Zsanitizer=address -Lnative=$runtime -Clink-arg=clang_rt.asan_dynamic-x86_64.lib -Clink-arg=/wholearchive:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
+            export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$flags -C linker-flavor=msvc -C target-feature=-crt-static -Zsanitizer=address -Clink-arg=$libs/clang_rt.asan_dynamic-x86_64.lib -Clink-arg=/wholearchive:$libs/clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
             # An empty RUSTFLAGS from cargo-xwin would hide the target's flags.
             unset RUSTFLAGS
             export PATH="$runtime:$PATH"
