@@ -150,6 +150,13 @@ jobs:
           RUNS: ${{ inputs.kani }}
         run: |
           export KANI_HOME="${RUNNER_TOOL_CACHE:-$HOME/.cache}/kani"
+          # CBMC preprocesses its C models with `gcc -E`; the runners have
+          # clang alone, which takes the same flags.
+          if ! command -v gcc > /dev/null; then
+            mkdir -p "$RUNNER_TEMP/kani-bin"
+            ln -sf "$(command -v clang)" "$RUNNER_TEMP/kani-bin/gcc"
+            export PATH="$RUNNER_TEMP/kani-bin:$PATH"
+          fi
           if ! cargo kani --version 2> /dev/null | grep -q " $KANI "; then
             flock "$CARGO_HOME.lock" cargo install --locked "kani-verifier@$KANI"
           fi
@@ -173,6 +180,10 @@ jobs:
           RUSTFLAGS: -Zsanitizer=address
         run: |
           host=$(rustc -vV | sed -n 's/^host: //p')
+          # Leak and error reports name functions only with a symbolizer;
+          # clang's LLVM brings one.
+          symbolizer=$(compgen -G '/usr/lib/llvm-*/bin/llvm-symbolizer' | sort -V | tail -n 1 || true)
+          if [ -n "$symbolizer" ]; then export ASAN_SYMBOLIZER_PATH="$symbolizer"; fi
           # shellcheck disable=SC2086 # one word per argument
           cargo "+$NIGHTLY" test --target "$host" --target-dir target/asan $ARGS
 
