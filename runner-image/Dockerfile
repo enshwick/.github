@@ -49,4 +49,5 @@ RUN set -eu; \
 USER runner
 
 # The Wine prefix, made once here instead of by every Wine job (8 s).
-RUN WINEDEBUG=-all wineboot -i > /dev/null 2>&1; test -f "$HOME/.wine/system.reg"
+# wineboot returns before wineserver has written the registry.
+RUN WINEDEBUG=-all wineboot -i > /dev/null 2>&1; wineserver -w; ls "$HOME/.wine"; test -f "$HOME/.wine/system.reg"
