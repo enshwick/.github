@@ -295,7 +295,22 @@ jobs:
           [ -n "$tests" ] || exit 0
           packages=()
           for package in $tests; do packages+=(-p "$package"); done
-          cargo test --target x86_64-pc-windows-msvc "${packages[@]}" -- --test-threads 1
+          status=0
+          cargo test --target x86_64-pc-windows-msvc "${packages[@]}" -- --test-threads 1 || status=$?
+          if [ "$status" != 0 ]; then
+            # A crash takes the harness's buffered output with it: run the
+            # library tests one by one to name the ones that crash.
+            echo "::group::Each test alone"
+            cargo test --quiet --target x86_64-pc-windows-msvc "${packages[@]}" --lib -- --list --format terse |
+              sed -n 's/: test$//p' > "$RUNNER_TEMP/tests.txt"
+            exe=$(cargo test --no-run --message-format json --target x86_64-pc-windows-msvc "${packages[@]}" --lib |
+              jq -r 'select(.profile.test == true and .target.kind[0] == "lib") | .executable' | head -1)
+            while read -r name; do
+              "$exe" --exact "$name" --test-threads 1 > /dev/null 2>&1 || echo "::error::crashed or failed alone: $name"
+            done < "$RUNNER_TEMP/tests.txt"
+            echo "::endgroup::"
+          fi
+          exit "$status"
 
       # The work tree's build output goes; the shared caches stay.
       - name: Clean up
