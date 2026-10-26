@@ -5,7 +5,9 @@ name: Windows native tests
 # failures that Wine does not show. Only members can start it, and it runs
 # only the organization's own branches, the trust the pull request lane on
 # the same runners already gives them. The PC is the owner's: one job,
-# bounded.
+# bounded. With `asan`, the tests run under AddressSanitizer: the pinned
+# nightly instruments them, and the runtime is clang's, from the LLVM the
+# setup already unpacks; no Visual Studio is needed.
 
 on:
   workflow_dispatch:
@@ -26,6 +28,10 @@ on:
         description: Test name filters, space-separated; all tests when empty.
         type: string
         default: ""
+      asan:
+        description: Run the tests under AddressSanitizer.
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -44,6 +50,7 @@ jobs:
         shell: bash
     env:
       CARGO_BUILD_JOBS: "3"
+      NIGHTLY: nightly-2026-10-26
     steps:
       - name: Only the organization's repositories
         env:
@@ -80,12 +87,37 @@ jobs:
         env:
           PACKAGE: ${{ inputs.package }}
           FILTER: ${{ inputs.filter }}
+          ASAN: ${{ inputs.asan }}
         run: |
           eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep -v '^export PATH=')"
           unset CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER
+          toolchain=()
+          if [ "$ASAN" = true ]; then
+            lock="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}/.lock"
+            until mkdir "$lock" 2> /dev/null; do
+              if [ -n "$(find "$lock" -maxdepth 0 -mmin +15 2> /dev/null)" ]; then rmdir "$lock"; fi
+              sleep 2
+            done
+            trap 'rmdir "$lock" 2> /dev/null || true' EXIT
+            rustup toolchain install "$NIGHTLY" --profile minimal --target x86_64-pc-windows-msvc
+            rmdir "$lock"
+            toolchain=("+$NIGHTLY")
+            runtime=$(compgen -G "$(dirname "$(command -v clang-cl)")/../lib/clang/*/lib/windows" | head -n 1)
+            # rustc hands the MSVC linker /INFERASANLIBS and any other its own
+            # runtime, which no Windows toolchain ships; lld named `link`
+            # links as link.exe, and the runtime is named outright.
+            mkdir -p "$RUNNER_TEMP/asan-link"
+            cp "$(command -v lld-link)" "$RUNNER_TEMP/asan-link/link.exe"
+            flags=${CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS/-C linker-flavor=lld-link/}
+            export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER="$RUNNER_TEMP/asan-link/link.exe"
+            export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$flags -C linker-flavor=msvc -Zsanitizer=address -Lnative=$runtime -Clink-arg=clang_rt.asan_dynamic-x86_64.lib -Clink-arg=/wholearchive:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
+            # An empty RUSTFLAGS from cargo-xwin would hide the target's flags.
+            unset RUSTFLAGS
+            export PATH="$runtime:$PATH"
+          fi
           git log -1 --format='%H %s'
           read -ra filters <<< "$FILTER"
-          cargo test --target x86_64-pc-windows-msvc -p "$PACKAGE" --lib -- "${filters[@]}" --test-threads 1 --nocapture
+          cargo "${toolchain[@]}" test --target x86_64-pc-windows-msvc -p "$PACKAGE" --lib -- "${filters[@]}" --test-threads 1 --nocapture
 
       - name: Clean up
         if: always()
