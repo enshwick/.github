@@ -28,11 +28,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install rustup
-        run: |
-          command -v rustup || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-            | sh -s -- -y --profile minimal --default-toolchain none
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      # The C toolchain the build scripts link with comes with setup-rust.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: enshwick/.github
+          ref: main
+          path: .enshwick-ci
+          persist-credentials: false
+      - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
 
       - name: Publish
         env:
