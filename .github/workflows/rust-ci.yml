@@ -25,7 +25,7 @@ on:
         type: boolean
         default: false
       native-tests:
-        description: Run the Windows tests natively on the owner's PC when it is online; off, they run under Wine on the organization runners.
+        description: Run the Windows tests natively on the owner's PC while it is online, and under Wine on the organization runners while it is offline, pull requests included. A native failure fails the check. Off, they run under Wine outside pull requests.
         type: boolean
         default: false
       clippy-features:
@@ -445,11 +445,15 @@ jobs:
         if: always()
         run: rm -rf target
 
+  # The Windows tests under Wine on the organization runners: while the
+  # owner's PC is offline, or for callers without `native-tests` outside
+  # pull requests.
   windows-wine:
     needs: [scope, windows-gate, windows-native]
     if: >-
-      always() && inputs.split && needs.scope.outputs.skip == '' && github.event_name != 'pull_request'
-      && (needs.windows-gate.outputs.native != 'true' || !inputs.native-tests || needs.windows-native.result == 'failure')
+      always() && inputs.split && needs.scope.outputs.skip == ''
+      && (github.event_name != 'pull_request' || inputs.native-tests)
+      && (needs.windows-gate.outputs.native != 'true' || !inputs.native-tests)
     runs-on: enshwick
     timeout-minutes: 45
     permissions:
