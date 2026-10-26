@@ -105,19 +105,28 @@ jobs:
             runtime=$(compgen -G "$(dirname "$(command -v clang-cl)")/../lib/clang/*/lib/windows" | head -n 1)
             # rustc hands the MSVC linker /INFERASANLIBS and any other its own
             # runtime, which no Windows toolchain ships; lld named `link`
-            # links as link.exe, and the runtime is named outright.
+            # links as link.exe, and the runtime is named outright. The
+            # tests link the static CRT (libcmt), hence the static thunk.
             mkdir -p "$RUNNER_TEMP/asan-link"
             cp "$(command -v lld-link)" "$RUNNER_TEMP/asan-link/link.exe"
             flags=${CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS/-C linker-flavor=lld-link/}
             export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER="$RUNNER_TEMP/asan-link/link.exe"
-            export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$flags -C linker-flavor=msvc -Zsanitizer=address -Lnative=$runtime -Clink-arg=clang_rt.asan_dynamic-x86_64.lib -Clink-arg=/wholearchive:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
+            export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$flags -C linker-flavor=msvc -Zsanitizer=address -Lnative=$runtime -Clink-arg=clang_rt.asan_dynamic-x86_64.lib -Clink-arg=/wholearchive:clang_rt.asan_static_runtime_thunk-x86_64.lib"
             # An empty RUSTFLAGS from cargo-xwin would hide the target's flags.
             unset RUSTFLAGS
             export PATH="$runtime:$PATH"
           fi
           git log -1 --format='%H %s'
           read -ra filters <<< "$FILTER"
-          cargo "${toolchain[@]}" test --target x86_64-pc-windows-msvc -p "$PACKAGE" --lib -- "${filters[@]}" --test-threads 1 --nocapture
+          if ! cargo "${toolchain[@]}" test --target x86_64-pc-windows-msvc -p "$PACKAGE" --lib -- "${filters[@]}" --test-threads 1 --nocapture; then
+            # A test executable that does not start names the DLLs it lacks.
+            if [ "$ASAN" = true ]; then
+              echo "runtime: ${runtime:-none}"
+              ls "$runtime" || true
+              find target -name '*.exe' -path '*/out/*' -newer Cargo.toml -exec ldd {} \; || true
+            fi
+            exit 1
+          fi
 
       - name: Clean up
         if: always()
