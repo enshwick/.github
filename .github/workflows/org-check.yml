@@ -30,7 +30,8 @@ jobs:
           persist-credentials: false
 
       # Merge settings are visible only to a token with Administration read
-      # access; without it the check says so instead of guessing.
+      # access; without it the check skips them and says so in the run's
+      # summary, never in the issue.
       - name: Mint the enshwick-ci token
         id: token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
@@ -47,7 +48,10 @@ jobs:
       - name: Check every repository
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
-        run: scripts/org-check.sh "$GITHUB_REPOSITORY_OWNER" "$RUNNER_TEMP/org-check" > "$RUNNER_TEMP/findings.md"
+        run: |
+          scripts/org-check.sh "$GITHUB_REPOSITORY_OWNER" "$RUNNER_TEMP/org-check" \
+            > "$RUNNER_TEMP/findings.md" 2> "$RUNNER_TEMP/notes.txt"
+          cat "$RUNNER_TEMP/notes.txt" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Report
         env:

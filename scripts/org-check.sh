@@ -15,16 +15,20 @@ template="$work/.template-mod"
 git clone -q "https://github.com/$org/template-mod" "$template"
 latest=$(git -C "$template" rev-parse --short=7 HEAD)
 
+unreadable=0
 repos=$(gh repo list "$org" --visibility public --no-archived --limit 200 --json name --jq '.[].name' | sort)
 for repo in $repos; do
   findings=()
 
   settings=$(gh api "repos/$org/$repo")
+  if [ "$(jq -r .allow_squash_merge <<< "$settings")" = null ]; then
+    unreadable=1
+  fi
   while IFS= read -r line; do
     [ -n "$line" ] && findings+=("$line")
   done < <(jq -r '
     if .allow_squash_merge == null then
-      "settings not visible: the token needs Administration read access"
+      empty
     else
     [ (select(.allow_squash_merge != true) | "squash merges are off"),
       (select(.allow_merge_commit != false) | "merge commits are allowed"),
@@ -70,3 +74,8 @@ for repo in $repos; do
     for finding in "${findings[@]}"; do echo "  - $finding"; done
   fi
 done
+
+# Checks the token could not make are a note, not findings.
+if [ "$unreadable" = 1 ]; then
+  echo >&2 "note: merge settings not checked: the token has no Administration read access"
+fi
