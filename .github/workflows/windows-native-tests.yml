@@ -117,8 +117,11 @@ jobs:
             flags=${CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS/-C linker-flavor=lld-link/}
             flags=${flags/-C link-arg=-nodefaultlib:ucrt -C link-arg=-defaultlib:libucrt/}
             export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER="$RUNNER_TEMP/asan-link/link.exe"
-            export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$flags -C linker-flavor=msvc -C target-feature=-crt-static -Zsanitizer=address -Clink-arg=$libs/clang_rt.asan_dynamic-x86_64.lib -Clink-arg=/wholearchive:$libs/clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
-            # An empty RUSTFLAGS from cargo-xwin would hide the target's flags.
+            export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$flags -C linker-flavor=msvc -C target-feature=-crt-static -Zsanitizer=address --cfg enshwick_asan -Clink-arg=$libs/clang_rt.asan_dynamic-x86_64.lib -Clink-arg=/wholearchive:$libs/clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
+            # `enshwick_asan` tells the code it runs sanitized, for what the
+            # sanitizer must leave alone, such as walks over other threads'
+            # stacks. An empty RUSTFLAGS from cargo-xwin would hide the
+            # target's flags.
             unset RUSTFLAGS
             export PATH="$runtime:$PATH"
           fi
