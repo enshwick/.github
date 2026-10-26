@@ -43,7 +43,7 @@ jobs:
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
         with:
           gh: true
-          tools: cargo-cyclonedx@0.5.9
+          tools: cargo-cyclonedx@0.5.9,cargo-auditable@0.7.7
 
       # Reproducible builds: no machine paths in the DLLs and PDBs, no
       # timestamps from the linker, and the PDB named without its path.
@@ -59,6 +59,8 @@ jobs:
       - name: cargo xtask dist
         env:
           GH_TOKEN: ${{ github.token }}
+          # Each DLL carries its dependency tree, for `cargo audit bin`.
+          ENSHWICK_AUDITABLE: "1"
         run: cargo xtask dist --out "$RUNNER_TEMP/dev"
 
       # A CycloneDX SBOM and the PDB of every DLL this build made.

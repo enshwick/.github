@@ -40,7 +40,7 @@ jobs:
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
         with:
           gh: true
-          tools: cargo-cyclonedx@0.5.9
+          tools: cargo-cyclonedx@0.5.9,cargo-auditable@0.7.7
 
       # The stock runner image has no gh, which looks up the mods' dev
       # prereleases and publishes this one. The release binary, checked
@@ -59,6 +59,8 @@ jobs:
       - name: cargo xtask bundle
         env:
           GH_TOKEN: ${{ github.token }}
+          # Each DLL carries its dependency tree, for `cargo audit bin`.
+          ENSHWICK_AUDITABLE: "1"
         run: cargo xtask bundle --out "$RUNNER_TEMP/dev"
 
       # A CycloneDX SBOM and the PDB of every DLL this build made.
