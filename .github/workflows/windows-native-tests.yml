@@ -1,0 +1,88 @@
+name: Windows native tests
+
+# By hand: tests of an enshwick repository at any of its refs, natively on
+# the owner's PC (label `enshwick-pc`), with the output shown. For chasing
+# failures that Wine does not show. Only members can start it, and it runs
+# only the organization's own branches, the trust the pull request lane on
+# the same runners already gives them. The PC is the owner's: one job,
+# bounded.
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: The repository, owner/name.
+        type: string
+        default: enshwick/enshwick
+      ref:
+        description: Branch, tag or commit to test.
+        type: string
+        required: true
+      package:
+        description: The package whose tests run.
+        type: string
+        default: enshwick-loader
+      filter:
+        description: Test name filters, space-separated; all tests when empty.
+        type: string
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: windows-native-tests
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    runs-on: [self-hosted, Windows, X64, enshwick-pc]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_BUILD_JOBS: "3"
+    steps:
+      - name: Only the organization's repositories
+        env:
+          REPOSITORY: ${{ inputs.repository }}
+        run: |
+          case "$REPOSITORY" in
+            enshwick/*) ;;
+            *) echo "::error::only enshwick/* repositories"; exit 1 ;;
+          esac
+
+      - name: Long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: enshwick/.github
+          ref: main
+          path: .enshwick-ci
+          persist-credentials: false
+
+      - uses: ./.enshwick-ci/.github/actions/setup-rust-windows # zizmor: ignore[self-repository]
+
+      - name: Tests
+        env:
+          PACKAGE: ${{ inputs.package }}
+          FILTER: ${{ inputs.filter }}
+        run: |
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep -v '^export PATH=')"
+          unset CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER
+          git log -1 --format='%H %s'
+          read -ra filters <<< "$FILTER"
+          cargo test --target x86_64-pc-windows-msvc -p "$PACKAGE" --lib -- "${filters[@]}" --test-threads 1 --nocapture
+
+      - name: Clean up
+        if: always()
+        run: rm -rf target
