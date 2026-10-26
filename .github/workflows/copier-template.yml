@@ -4,6 +4,10 @@ name: Copier template
 # and checks the result: the answers file holds them, `src/lib.rs` names the
 # mod's id and a Rust type. Each answer in `refuse` must be refused by the
 # template's validators. Nothing is compiled.
+#
+# It runs on a GitHub-hosted runner: it needs none of the organization
+# runners' Rust toolchain, sccache, cargo-xwin or Wine, and those runners
+# are kept for the jobs that do.
 
 on:
   workflow_call:
@@ -21,7 +25,7 @@ permissions: {}
 
 jobs:
   render:
-    runs-on: enshwick
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read

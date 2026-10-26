@@ -6,6 +6,10 @@ name: Docs site
 # version's ref), so a deploy also runs when those change, by hand or on a
 # schedule in the caller. The caller grants `pages: write` and
 # `id-token: write` for a deploy.
+#
+# It runs on a GitHub-hosted runner: it needs none of the organization
+# runners' Rust toolchain, sccache, cargo-xwin or Wine, and those runners
+# are kept for the jobs that do.
 
 on:
   workflow_call:
@@ -20,7 +24,7 @@ permissions: {}
 jobs:
   build:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: enshwick
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -54,7 +58,7 @@ jobs:
   deploy:
     if: inputs.deploy
     needs: build
-    runs-on: enshwick
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       pages: write

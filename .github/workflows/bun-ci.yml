@@ -4,6 +4,10 @@ name: Bun CI
 # install, then `bun run check`, which formats, lints, type-checks and tests.
 # With `artifact` set, `bun run build` follows and the folder it writes is
 # uploaded as the run's artifact of that name. Nothing is released.
+#
+# It runs on a GitHub-hosted runner: it needs none of the organization
+# runners' Rust toolchain, sccache, cargo-xwin or Wine, and those runners
+# are kept for the jobs that do.
 
 on:
   workflow_call:
@@ -22,7 +26,7 @@ permissions: {}
 jobs:
   check:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: enshwick
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read

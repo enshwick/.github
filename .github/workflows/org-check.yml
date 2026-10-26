@@ -4,6 +4,10 @@ name: Organization check
 # shared configuration against template-mod and whether its template is
 # behind (scripts/org-check.sh). The findings go into one open issue here,
 # which closes once nothing is left.
+#
+# It runs on a GitHub-hosted runner: it needs none of the organization
+# runners' Rust toolchain, sccache, cargo-xwin or Wine, and those runners
+# are kept for the jobs that do.
 
 on:
   schedule:
@@ -19,7 +23,7 @@ concurrency:
 jobs:
   check:
     if: github.repository == 'enshwick/.github'
-    runs-on: enshwick
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -40,10 +44,6 @@ jobs:
           private-key: ${{ secrets.ENSHWICK_CI_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }} # zizmor: ignore[github-app]
           permission-contents: read
-
-      - uses: ./.github/actions/setup-rust # zizmor: ignore[self-repository]
-        with:
-          gh: true
 
       - name: Check every repository
         env:
