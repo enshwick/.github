@@ -3,7 +3,7 @@ name: Rust nightly
 # The checks too slow for a pull request, once a night on the organization
 # runners: Miri on the packages a repository names, unused dependencies,
 # coverage, external links, benchmarks and, where a repository asks, its fuzz
-# targets. Every step runs even after another failed, so one night reports
+# targets, loom models and tests under AddressSanitizer. Every step runs even after another failed, so one night reports
 # everything. Packages that build only for Windows
 # (`[package.metadata.enshwick] windows-only = true`) stay out: these checks
 # run on the Linux host.
@@ -27,6 +27,14 @@ on:
         description: How long each fuzz target runs.
         type: number
         default: 120
+      loom:
+        description: cargo test arguments for the loom models, built with `--cfg loom`, such as `-p a-crate --test loom_chains`; none when empty.
+        type: string
+        default: ""
+      asan:
+        description: cargo test arguments for the tests to run under AddressSanitizer, such as `-p a-crate --lib`; none when empty.
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -119,6 +127,28 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # one word per flag
           cargo bench --workspace $EXCLUDES
+
+      # Release builds: a model run in debug takes many times as long.
+      - name: Loom models
+        if: ${{ !cancelled() && inputs.loom != '' }}
+        env:
+          ARGS: ${{ inputs.loom }}
+          RUSTFLAGS: --cfg loom
+        run: |
+          # shellcheck disable=SC2086 # one word per argument
+          cargo test --release --target-dir target/loom $ARGS
+
+      # The host target named, so build scripts and proc macros stay
+      # uninstrumented.
+      - name: AddressSanitizer
+        if: ${{ !cancelled() && inputs.asan != '' }}
+        env:
+          ARGS: ${{ inputs.asan }}
+          RUSTFLAGS: -Zsanitizer=address
+        run: |
+          host=$(rustc -vV | sed -n 's/^host: //p')
+          # shellcheck disable=SC2086 # one word per argument
+          cargo "+$NIGHTLY" test --target "$host" --target-dir target/asan $ARGS
 
       # A crash fails the step and keeps its input as an artifact. What the
       # runs find stays on the runner: the committed corpus is the seeds.
