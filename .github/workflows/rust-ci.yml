@@ -157,8 +157,10 @@ jobs:
       - if: env.HOSTED == 'true'
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          # A cache saved by a failed run would be restored as it is and
+          # never replaced, so only a finished run saves one.
+          prefix-key: v1-rust
           key: ${{ matrix.part }}
-          cache-on-failure: true
 
       # The Windows tests set up Wine only when a package with such tests
       # changed.
