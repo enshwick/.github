@@ -258,10 +258,6 @@ jobs:
       FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
       # Ten runners share one 16-core PC that is also the owner's.
       CARGO_BUILD_JOBS: "3"
-      RUST_TEST_THREADS: "3"
-      # cargo-xwin would run the executables under Wine; here they run as
-      # they are (env only starts the program).
-      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER: env
     steps:
       - name: Long paths
         run: git config --global core.longpaths true
@@ -283,17 +279,22 @@ jobs:
 
       - uses: ./.enshwick-ci/.github/actions/setup-rust-windows # zizmor: ignore[self-repository]
 
+      # cargo-xwin's environment, then plain cargo: the tests run natively
+      # (no runner) and cargo's exit status reaches the job. One test thread,
+      # as under Wine: the hook and patch tests share the process.
       - name: Windows tests
         run: |
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc)"
+          unset CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER
           args=()
           if [ "$FULL" = true ]; then args+=(--all); else args+=(--base "$BASE"); fi
-          tests=$(cargo xwin run --quiet --target x86_64-pc-windows-msvc -p xtask -- \
+          tests=$(cargo run --quiet --target x86_64-pc-windows-msvc -p xtask -- \
             check "${args[@]}" --list-windows-tests | xargs)
           echo "Windows tests: ${tests:-none}"
           [ -n "$tests" ] || exit 0
           packages=()
           for package in $tests; do packages+=(-p "$package"); done
-          cargo xwin test --target x86_64-pc-windows-msvc "${packages[@]}" -- --test-threads "$RUST_TEST_THREADS"
+          cargo test --target x86_64-pc-windows-msvc "${packages[@]}" -- --test-threads 1
 
       # The work tree's build output goes; the shared caches stay.
       - name: Clean up
