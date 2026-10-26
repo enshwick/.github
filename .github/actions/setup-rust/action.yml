@@ -75,6 +75,32 @@ runs:
         rustup toolchain install
         rustc --version
 
-    - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+    # The tools live in the shared tool cache. Installing over a binary that
+    # a concurrent job is running fails that job ("text file busy"), so only
+    # a tool missing at its version is installed.
+    - name: Find the missing tools
+      id: tools
+      shell: bash
+      env:
+        TOOLS: cargo-xwin@0.23.1,sccache@0.19.0${{ inputs.tools != '' && format(',{0}', inputs.tools) || '' }}
+      run: |
+        missing=()
+        IFS=, read -ra specs <<< "$TOOLS"
+        for spec in "${specs[@]}"; do
+          name="${spec%@*}"
+          version="${spec#"$name"}"
+          version="${version#@}"
+          case "$name" in
+            cargo-*) found=$(cargo "${name#cargo-}" --version 2> /dev/null || true) ;;
+            *) found=$("$name" --version 2> /dev/null || true) ;;
+          esac
+          if [ -z "$found" ] || { [ -n "$version" ] && [[ "$found" != *"$version"* ]]; }; then
+            missing+=("$spec")
+          fi
+        done
+        echo "missing=$(IFS=,; echo "${missing[*]}")" >> "$GITHUB_OUTPUT"
+
+    - if: steps.tools.outputs.missing != ''
+      uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
       with:
-        tool: cargo-xwin,sccache${{ inputs.tools != '' && format(',{0}', inputs.tools) || '' }}
+        tool: ${{ steps.tools.outputs.missing }}
