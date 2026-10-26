@@ -1,0 +1,67 @@
+name: Docs site
+
+# The documentation site of enshwick/docs: checks and builds it, and with
+# `deploy` publishes the build to the caller's GitHub Pages. The build
+# collects pages from other public repositories (the platform's book at each
+# version's ref), so a deploy also runs when those change, by hand or on a
+# schedule in the caller. The caller grants `pages: write` and
+# `id-token: write` for a deploy.
+
+on:
+  workflow_call:
+    inputs:
+      deploy:
+        description: Publish the build to GitHub Pages; off checks and builds only.
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: enshwick
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.3
+
+      # No lifecycle scripts: the only one installs git hooks, which CI has
+      # no use for.
+      - name: Install
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bun run build
+
+      - name: Check
+        run: bun run check
+
+      - if: inputs.deploy
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+  deploy:
+    if: inputs.deploy
+    needs: build
+    runs-on: enshwick
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
