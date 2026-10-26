@@ -46,6 +46,7 @@ runs:
         echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
         echo "$RUNNER_TEMP/lld" >> "$GITHUB_PATH"
 
+<<<<<<< HEAD
     # Into a directory of this job, as on Linux: installing into the shared
     # cache would overwrite a binary another job is running.
     - name: Give the tools a directory of this job
@@ -69,6 +70,50 @@ runs:
         echo "CARGO_HOME=$SHARED_CARGO_HOME" >> "$GITHUB_ENV"
         echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
         export CARGO_HOME="$SHARED_CARGO_HOME"
+=======
+    # cargo-xwin and sccache from their releases, checked against pinned
+    # checksums and unpacked once into the shared cache; install-action
+    # needs PowerShell, which these runners do not carry.
+    - name: cargo-xwin and sccache
+      shell: bash
+      env:
+        XWIN_VERSION: 0.23.1
+        XWIN_SHA256: 114534c57cdcca604f59c9d70024583d20ff7c5505677f06247e971184a23872
+        SCCACHE_VERSION: 0.18.0
+        SCCACHE_SHA256: 8965c74d5e8a225244f741e18ad2f3f504f48228dc1bac948fc22761a348363d
+      run: | # zizmor: ignore[github-env] fixed paths only
+        cache="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}"
+        lock="$cache/.lock"
+        until mkdir "$lock" 2> /dev/null; do
+          if [ -n "$(find "$lock" -maxdepth 0 -mmin +15 2> /dev/null)" ]; then rmdir "$lock"; fi
+          sleep 2
+        done
+        trap 'rmdir "$lock"' EXIT
+        fetch() { # name version sha256 url
+          dir="$cache/tools/$1-$2"
+          if [ ! -d "$dir" ]; then
+            archive="$RUNNER_TEMP/$1.zip"
+            curl --proto '=https' --tlsv1.2 -sSfL -o "$archive" "$4"
+            echo "$3  $archive" | sha256sum -c -
+            mkdir -p "$dir.part"
+            /c/Windows/System32/tar.exe -xf "$archive" -C "$dir.part"
+            find "$dir.part" -name '*.exe' -exec mv {} "$dir.part/" \;
+            mv "$dir.part" "$dir"
+          fi
+          echo "$dir" >> "$GITHUB_PATH"
+        }
+        fetch cargo-xwin "$XWIN_VERSION" "$XWIN_SHA256" \
+          "https://github.com/rust-cross/cargo-xwin/releases/download/v$XWIN_VERSION/cargo-xwin-v$XWIN_VERSION.windows-x64.zip"
+        fetch sccache "$SCCACHE_VERSION" "$SCCACHE_SHA256" \
+          "https://github.com/mozilla/sccache/releases/download/v$SCCACHE_VERSION/sccache-v$SCCACHE_VERSION-x86_64-pc-windows-msvc.zip"
+
+    # The Windows SDK and CRT: cargo-xwin downloads them once into the
+    # shared cache, under the lock.
+    - name: The Windows SDK
+      shell: bash
+      run: | # zizmor: ignore[github-env] fixed paths only
+        echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+>>>>>>> e0b5647a697fc1b0f4fece8157542664ed053c3d
         lock="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}/.lock"
         until mkdir "$lock" 2> /dev/null; do
           if [ -n "$(find "$lock" -maxdepth 0 -mmin +15 2> /dev/null)" ]; then rmdir "$lock"; fi

@@ -259,6 +259,9 @@ jobs:
       # Ten runners share one 16-core PC that is also the owner's.
       CARGO_BUILD_JOBS: "3"
       RUST_TEST_THREADS: "3"
+      # cargo-xwin would run the executables under Wine; here they run as
+      # they are (env only starts the program).
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER: env
     steps:
       - name: Long paths
         run: git config --global core.longpaths true
