@@ -1,0 +1,121 @@
+name: Rust nightly
+
+# The checks too slow for a pull request, once a night on the organization
+# runners: Miri on the packages a repository names, unused dependencies,
+# coverage, external links and benchmarks. Every step runs even after another
+# failed, so one night reports everything. Packages that build only for
+# Windows (`[package.metadata.enshwick] windows-only = true`) stay out: these
+# checks run on the Linux host.
+
+on:
+  workflow_call:
+    inputs:
+      miri:
+        description: Packages whose library tests run under Miri, space-separated; none when empty.
+        type: string
+        default: ""
+      links:
+        description: Check the external links in the Markdown files with lychee.
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  nightly:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: enshwick
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      NIGHTLY: nightly-2026-10-20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Checked out and used by path, as in rust-ci.yml.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: enshwick/.github
+          ref: main
+          path: .enshwick-ci
+          persist-credentials: false
+      - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
+        with:
+          tools: cargo-nextest@0.9.149,cargo-udeps@0.1.61,cargo-llvm-cov@0.9.1
+
+      - name: Toolchains and the packages to check
+        id: scope
+        run: |
+          flock "$RUSTUP_HOME.lock" rustup toolchain install "$NIGHTLY" \
+            --profile minimal --component miri,rust-src
+          flock "$RUSTUP_HOME.lock" rustup component add llvm-tools
+          excludes=$(cargo metadata --no-deps --format-version 1 | jq -r '
+            [.packages[] | select(.metadata.enshwick["windows-only"] == true) | "--exclude " + .name]
+            | join(" ")')
+          hosted=$(cargo metadata --no-deps --format-version 1 | jq '
+            [.packages[] | select(.metadata.enshwick["windows-only"] != true)] | length')
+          benches=$(cargo metadata --no-deps --format-version 1 | jq '
+            [.packages[] | select(.metadata.enshwick["windows-only"] != true)
+              | .targets[] | select(.kind | index("bench"))] | length')
+          {
+            echo "excludes=$excludes"
+            echo "hosted=$hosted"
+            echo "benches=$benches"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Miri
+        if: ${{ !cancelled() && inputs.miri != '' }}
+        env:
+          PACKAGES: ${{ inputs.miri }}
+          # Tests that read fixtures from disk need the file system.
+          MIRIFLAGS: -Zmiri-disable-isolation
+        run: |
+          args=()
+          for package in $PACKAGES; do args+=(-p "$package"); done
+          cargo "+$NIGHTLY" miri test --lib "${args[@]}"
+
+      - name: Unused dependencies
+        if: ${{ !cancelled() && steps.scope.outputs.hosted != '0' }}
+        env:
+          EXCLUDES: ${{ steps.scope.outputs.excludes }}
+        run: |
+          # shellcheck disable=SC2086 # one word per flag
+          cargo "+$NIGHTLY" udeps --workspace $EXCLUDES --all-targets
+
+      - name: Coverage
+        if: ${{ !cancelled() && steps.scope.outputs.hosted != '0' }}
+        env:
+          EXCLUDES: ${{ steps.scope.outputs.excludes }}
+        run: |
+          # shellcheck disable=SC2086 # one word per flag
+          cargo llvm-cov nextest --workspace $EXCLUDES --no-tests=pass \
+            --summary-only | tee "$RUNNER_TEMP/coverage.txt"
+          {
+            echo '## Coverage'
+            echo
+            echo '```text'
+            cat "$RUNNER_TEMP/coverage.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Benchmarks
+        if: ${{ !cancelled() && steps.scope.outputs.benches != '0' }}
+        env:
+          EXCLUDES: ${{ steps.scope.outputs.excludes }}
+        run: |
+          # shellcheck disable=SC2086 # one word per flag
+          cargo bench --workspace $EXCLUDES
+
+      - name: External links
+        if: ${{ !cancelled() && inputs.links }}
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --no-progress --exclude-path target --exclude-path node_modules --exclude-path .enshwick-ci './**/*.md'
+          failIfEmpty: false
+
+      - name: sccache statistics
+        if: always() && env.RUSTC_WRAPPER == 'sccache'
+        run: command -v sccache > /dev/null && sccache --show-stats || true
