@@ -106,11 +106,12 @@ jobs:
             # rustc hands the MSVC linker /INFERASANLIBS and any other its own
             # runtime, which no Windows toolchain ships; lld named `link`
             # links as link.exe, and the runtime is named outright. The
-            # static CRT imports runtime functions only Microsoft's own build
-            # of it exports, so these tests link the CRT dynamically.
+            # static CRT and UCRT import runtime functions only Microsoft's
+            # own build of it exports, so these tests link both dynamically.
             mkdir -p "$RUNNER_TEMP/asan-link"
             cp "$(command -v lld-link)" "$RUNNER_TEMP/asan-link/link.exe"
             flags=${CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS/-C linker-flavor=lld-link/}
+            flags=${flags/-C link-arg=-nodefaultlib:ucrt -C link-arg=-defaultlib:libucrt/}
             export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER="$RUNNER_TEMP/asan-link/link.exe"
             export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$flags -C linker-flavor=msvc -C target-feature=-crt-static -Zsanitizer=address -Lnative=$runtime -Clink-arg=clang_rt.asan_dynamic-x86_64.lib -Clink-arg=/wholearchive:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib"
             # An empty RUSTFLAGS from cargo-xwin would hide the target's flags.
@@ -127,11 +128,12 @@ jobs:
               objdump="$(rustc --print sysroot)/lib/rustlib/x86_64-pc-windows-msvc/bin/llvm-objdump.exe"
               dll="$runtime/clang_rt.asan_dynamic-x86_64.dll"
               "$objdump" -p "$dll" | sed -n '/Export Table/,$p' | awk '{print $NF}' | sort -u > "$RUNNER_TEMP/exports"
-              for exe in $(find target/x86_64-pc-windows-msvc -name '*.exe' -path '*/out/*' -newer Cargo.toml); do
-                # What the test takes from the runtime that the runtime lacks.
-                "$objdump" -p "$exe" | awk '/DLL Name:/{d=$3} d ~ /clang_rt/ && /^ +[0-9]+ +[A-Za-z_]/{print $2}' |
-                  sort -u | comm -23 - "$RUNNER_TEMP/exports" | sed 's/^/missing from the runtime: /'
-              done
+              find target/x86_64-pc-windows-msvc -name '*.exe' -path '*/out/*' -newer Cargo.toml |
+                while read -r exe; do
+                  # What the test takes from the runtime that the runtime lacks.
+                  "$objdump" -p "$exe" | awk '/DLL Name:/{d=$3} d ~ /clang_rt/ && /^ +[0-9]+ +[A-Za-z_]/{print $2}' |
+                    sort -u | comm -23 - "$RUNNER_TEMP/exports" | sed 's/^/missing from the runtime: /'
+                done
               find target/x86_64-pc-windows-msvc -name '*.exe' -path '*/out/*' -newer Cargo.toml -exec ldd {} \; || true
             fi
             exit 1
