@@ -54,8 +54,12 @@ jobs:
             *) echo "::error::only enshwick/* repositories"; exit 1 ;;
           esac
 
-      - name: Long paths
-        run: git config --global core.longpaths true
+      - name: Git settings
+        run: |
+          git config --global core.longpaths true
+          # Git for Windows checks out with CRLF; rustfmt wants the files as
+          # committed.
+          git config --global core.autocrlf false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

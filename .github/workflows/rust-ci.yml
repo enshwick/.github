@@ -265,7 +265,7 @@ jobs:
   # a hosted runner.
   windows-lint-native:
     needs: [scope, windows-gate]
-    if: needs.windows-gate.outputs.native == 'true'
+    if: inputs.split && needs.windows-gate.outputs.native == 'true'
     runs-on: [self-hosted, Windows, X64, enshwick-pc]
     timeout-minutes: 20
     permissions:
@@ -278,8 +278,12 @@ jobs:
       CARGO_BUILD_JOBS: "3"
       FEATURES: ${{ inputs.clippy-features }}
     steps:
-      - name: Long paths
-        run: git config --global core.longpaths true
+      - name: Git settings
+        run: |
+          git config --global core.longpaths true
+          # Git for Windows checks out with CRLF; rustfmt wants the files as
+          # committed.
+          git config --global core.autocrlf false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -325,8 +329,12 @@ jobs:
       CARGO_BUILD_JOBS: "3"
       NEXTEST_TEST_THREADS: "3"
     steps:
-      - name: Long paths
-        run: git config --global core.longpaths true
+      - name: Git settings
+        run: |
+          git config --global core.longpaths true
+          # Git for Windows checks out with CRLF; rustfmt wants the files as
+          # committed.
+          git config --global core.autocrlf false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -375,8 +383,12 @@ jobs:
       # Ten runners share one 16-core PC that is also the owner's.
       CARGO_BUILD_JOBS: "3"
     steps:
-      - name: Long paths
-        run: git config --global core.longpaths true
+      - name: Git settings
+        run: |
+          git config --global core.longpaths true
+          # Git for Windows checks out with CRLF; rustfmt wants the files as
+          # committed.
+          git config --global core.autocrlf false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
