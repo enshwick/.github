@@ -284,7 +284,8 @@ jobs:
       # as under Wine: the hook and patch tests share the process.
       - name: Windows tests
         run: |
-          eval "$(cargo xwin env --target x86_64-pc-windows-msvc)"
+          # Its PATH is in Windows form and would hide bash's tools.
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep -v '^export PATH=')"
           unset CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER
           args=()
           if [ "$FULL" = true ]; then args+=(--all); else args+=(--base "$BASE"); fi
