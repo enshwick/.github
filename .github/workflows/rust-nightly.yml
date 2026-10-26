@@ -178,6 +178,10 @@ jobs:
         env:
           ARGS: ${{ inputs.asan }}
           RUSTFLAGS: -Zsanitizer=address
+          # Memory errors only: memory handed across the C ABI and a fake
+          # loader's earlier mod lives are never freed on purpose, which
+          # LeakSanitizer reports as leaks.
+          ASAN_OPTIONS: detect_leaks=0
         run: |
           host=$(rustc -vV | sed -n 's/^host: //p')
           # Leak and error reports name functions only with a symbolizer;
