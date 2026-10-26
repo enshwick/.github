@@ -304,7 +304,7 @@ jobs:
             cargo test --quiet --target x86_64-pc-windows-msvc "${packages[@]}" --lib -- --list --format terse |
               sed -n 's/: test$//p' > "$RUNNER_TEMP/tests.txt"
             exe=$(cargo test --no-run --message-format json --target x86_64-pc-windows-msvc "${packages[@]}" --lib |
-              jq -r 'select(.profile.test == true and .target.kind[0] == "lib") | .executable' | head -1)
+              grep '"test":true' | grep -o '"executable":"[^"]*"' | head -1 | sed 's/^"executable":"//; s/"$//; s/\\\\/\//g')
             while read -r name; do
               "$exe" --exact "$name" --test-threads 1 > /dev/null 2>&1 || echo "::error::crashed or failed alone: $name"
             done < "$RUNNER_TEMP/tests.txt"
