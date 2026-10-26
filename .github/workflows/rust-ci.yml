@@ -274,17 +274,18 @@ jobs:
       run:
         shell: bash
     env:
+      # Git settings for this job only: the ten runners share one user
+      # profile, and writing its global config at once fails on the lock.
+      # Long paths for the work tree; no CRLF, which rustfmt rejects.
+      GIT_CONFIG_COUNT: "2"
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: "true"
+      GIT_CONFIG_KEY_1: core.autocrlf
+      GIT_CONFIG_VALUE_1: "false"
       # Ten runners share one 16-core PC that is also the owner's.
       CARGO_BUILD_JOBS: "3"
       FEATURES: ${{ inputs.clippy-features }}
     steps:
-      - name: Git settings
-        run: |
-          git config --global core.longpaths true
-          # Git for Windows checks out with CRLF; rustfmt wants the files as
-          # committed.
-          git config --global core.autocrlf false
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -323,19 +324,20 @@ jobs:
       run:
         shell: bash
     env:
+      # Git settings for this job only: the ten runners share one user
+      # profile, and writing its global config at once fails on the lock.
+      # Long paths for the work tree; no CRLF, which rustfmt rejects.
+      GIT_CONFIG_COUNT: "2"
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: "true"
+      GIT_CONFIG_KEY_1: core.autocrlf
+      GIT_CONFIG_VALUE_1: "false"
       BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
       FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
       # Ten runners share one 16-core PC that is also the owner's.
       CARGO_BUILD_JOBS: "3"
       NEXTEST_TEST_THREADS: "3"
     steps:
-      - name: Git settings
-        run: |
-          git config --global core.longpaths true
-          # Git for Windows checks out with CRLF; rustfmt wants the files as
-          # committed.
-          git config --global core.autocrlf false
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -378,18 +380,19 @@ jobs:
       run:
         shell: bash
     env:
+      # Git settings for this job only: the ten runners share one user
+      # profile, and writing its global config at once fails on the lock.
+      # Long paths for the work tree; no CRLF, which rustfmt rejects.
+      GIT_CONFIG_COUNT: "2"
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: "true"
+      GIT_CONFIG_KEY_1: core.autocrlf
+      GIT_CONFIG_VALUE_1: "false"
       BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
       FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
       # Ten runners share one 16-core PC that is also the owner's.
       CARGO_BUILD_JOBS: "3"
     steps:
-      - name: Git settings
-        run: |
-          git config --global core.longpaths true
-          # Git for Windows checks out with CRLF; rustfmt wants the files as
-          # committed.
-          git config --global core.autocrlf false
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
