@@ -2,7 +2,7 @@
 # Rust job would otherwise install with apt at its start. Rust itself, the
 # cargo tools and sccache stay in the runners' shared tool cache, where
 # setup-rust keeps them current.
-FROM ghcr.io/actions/actions-runner:2.338.0@sha256:4ffadc0002b2581327e06101fc8c06cd189232baf79fe561fac9caeb76f5e807
+FROM ghcr.io/actions/actions-runner:2.338.1@sha256:e275409999c37162649aa050ca573f03eab2eabcb3a1e7fcc47548de6b4f9690
 
 LABEL org.opencontainers.image.source=https://github.com/enshwick/.github \
       org.opencontainers.image.description="Organization runner image of enshwick"
