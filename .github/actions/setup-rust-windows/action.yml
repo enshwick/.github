@@ -48,6 +48,31 @@ runs:
         echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
         echo "$RUNNER_TEMP/lld" >> "$GITHUB_PATH"
 
+<<<<<<< HEAD
+    # Into a directory of this job, as on Linux: installing into the shared
+    # cache would overwrite a binary another job is running.
+    - name: Give the tools a directory of this job
+      shell: bash
+      run: | # zizmor: ignore[github-env] fixed paths only
+        tools="$RUNNER_TEMP/tools"
+        mkdir -p "$tools/bin"
+        echo "SHARED_CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+        echo "CARGO_HOME=$tools" >> "$GITHUB_ENV"
+        echo "$tools/bin" >> "$GITHUB_PATH"
+
+    - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+      with:
+        tool: cargo-xwin@0.23.1,sccache@0.18.0
+
+    # The Windows SDK and CRT: cargo-xwin downloads them once into the
+    # shared cache, under the lock.
+    - name: Share the registry cache and fetch the SDK
+      shell: bash
+      run: | # zizmor: ignore[github-env] fixed paths only
+        echo "CARGO_HOME=$SHARED_CARGO_HOME" >> "$GITHUB_ENV"
+        echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+        export CARGO_HOME="$SHARED_CARGO_HOME"
+=======
     # cargo-xwin and sccache from their releases, checked against pinned
     # checksums and unpacked once into the shared cache; install-action
     # needs PowerShell, which these runners do not carry.
@@ -108,6 +133,7 @@ runs:
       shell: bash
       run: | # zizmor: ignore[github-env] fixed paths only
         echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+>>>>>>> e0b5647a697fc1b0f4fece8157542664ed053c3d
         lock="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}/.lock"
         until mkdir "$lock" 2> /dev/null; do
           if [ -n "$(find "$lock" -maxdepth 0 -mmin +15 2> /dev/null)" ]; then rmdir "$lock"; fi
