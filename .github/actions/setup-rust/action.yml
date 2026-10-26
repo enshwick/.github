@@ -64,7 +64,10 @@ runs:
           cp -n "$archives"/*.deb "$shared"/ 2> /dev/null || true
         fi
         if [ "$WINE" = true ]; then
-          WINEDEBUG=-all wineboot -i > /dev/null 2>&1 || true
+          # The runner image carries a prefix already.
+          if [ ! -f "${WINEPREFIX:-$HOME/.wine}/system.reg" ]; then
+            WINEDEBUG=-all wineboot -i > /dev/null 2>&1 || true
+          fi
           echo "WINEDEBUG=-all" >> "$GITHUB_ENV"
         fi
 
@@ -109,12 +112,28 @@ runs:
         echo "CARGO_HOME=$tools" >> "$GITHUB_ENV"
         echo "$tools/bin" >> "$GITHUB_PATH"
 
+    # The runner image lists the tools it carries; only the others are
+    # installed.
+    - name: Tools the image lacks
+      id: tools
+      shell: bash
+      env:
+        TOOLS: cargo-xwin@0.23.1,sccache@0.18.0${{ inputs.tools != '' && format(',{0}', inputs.tools) || '' }}
+      run: |
+        missing=()
+        IFS=, read -ra wanted <<< "$TOOLS"
+        for tool in "${wanted[@]}"; do
+          grep -qxF "$tool" /opt/enshwick-tools/list 2> /dev/null || missing+=("$tool")
+        done
+        echo "missing=$(IFS=,; echo "${missing[*]}")" >> "$GITHUB_OUTPUT"
+
     # Every version here must be in install-action's manifests at this SHA:
     # a version it lacks falls back to cargo-binstall, which fails in the
     # per-job tools directory.
-    - uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+    - if: steps.tools.outputs.missing != ''
+      uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
       with:
-        tool: cargo-xwin@0.23.1,sccache@0.18.0${{ inputs.tools != '' && format(',{0}', inputs.tools) || '' }}
+        tool: ${{ steps.tools.outputs.missing }}
 
     - name: Share the registry cache again
       shell: bash
