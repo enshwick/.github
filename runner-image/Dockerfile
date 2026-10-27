@@ -13,15 +13,17 @@ USER root
 
 # clang of the Rust toolchain's LLVM major from apt.llvm.org, with its
 # sanitizer runtime, for cargo-xwin and the nightly's sanitized builds
-# (setup-rust installs another major if the toolchain moved on); Wine's
-# newest stable release from WineHQ for the Windows tests; the 32-bit C
-# runtime for SteamCMD, jq for the workflows' scripts, xz for tools packed
-# as .tar.xz. Both keys are checked against their SHA-256: apt.llvm.org's
-# is 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421, WineHQ's
-# D43F640145369C51D786DDEA76F1A20FF987672F.
+# (setup-rust installs another major if the toolchain moved on); Wine for
+# the Windows tests; the 32-bit C runtime for SteamCMD, jq for the
+# workflows' scripts, xz for tools packed as .tar.xz. apt.llvm.org's key
+# (6084F3CF814B57C1CF12EFD515CF4D18AF4F7421) is checked against its SHA-256.
+#
+# Ubuntu's Wine 9, not WineHQ's stable 11: in a run of the platform's
+# Windows tests in this image on a GitHub-hosted runner, Wine 11's
+# wineserver failed ("socket: Function not implemented", 2026-10-27). It
+# moves once a run on the organization runners shows Wine 11 passes.
 ARG LLVM_MAJOR=23
 ARG LLVM_APT_SIGNER_SUM=8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d
-ARG WINEHQ_APT_SIGNER_SUM=d965d646defe94b3dfba6d5b4406900ac6c81065428bf9d9303ad7a72ee8d1b8
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN set -eu; \
     dpkg --add-architecture i386; \
@@ -30,16 +32,12 @@ RUN set -eu; \
     install -d -m 0755 /etc/apt/keyrings; \
     curl --proto '=https' --tlsv1.2 -sSfL -o /etc/apt/keyrings/apt-llvm.asc https://apt.llvm.org/llvm-snapshot.gpg.key; \
     echo "$LLVM_APT_SIGNER_SUM  /etc/apt/keyrings/apt-llvm.asc" | sha256sum -c -; \
-    curl --proto '=https' --tlsv1.2 -sSfL -o /etc/apt/keyrings/winehq.asc https://dl.winehq.org/wine-builds/winehq.key; \
-    echo "$WINEHQ_APT_SIGNER_SUM  /etc/apt/keyrings/winehq.asc" | sha256sum -c -; \
     codename=$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release); \
     echo "deb [signed-by=/etc/apt/keyrings/apt-llvm.asc] https://apt.llvm.org/$codename/ llvm-toolchain-$codename-$LLVM_MAJOR main" \
       > "/etc/apt/sources.list.d/llvm-$LLVM_MAJOR.list"; \
-    echo "deb [arch=amd64,i386 signed-by=/etc/apt/keyrings/winehq.asc] https://dl.winehq.org/wine-builds/ubuntu/ $codename main" \
-      > /etc/apt/sources.list.d/winehq.list; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        "clang-$LLVM_MAJOR" "libclang-rt-$LLVM_MAJOR-dev" winehq-stable lib32gcc-s1 jq xz-utils; \
+        "clang-$LLVM_MAJOR" "libclang-rt-$LLVM_MAJOR-dev" wine wine64 lib32gcc-s1 jq xz-utils; \
     rm -rf /var/lib/apt/lists/*; \
     # Ubuntu's packages carry no clang-cl; clang called by that name works
     # as one. First on PATH, ahead of anything else named clang. It is cc
