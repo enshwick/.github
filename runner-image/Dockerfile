@@ -11,19 +11,47 @@ LABEL org.opencontainers.image.source=https://github.com/enshwick/.github \
 
 USER root
 
-# clang and lld for cargo-xwin, Wine for the Windows tests, the 32-bit C
-# runtime for SteamCMD, jq for the workflows' scripts, xz for tools packed
-# as .tar.xz.
-RUN dpkg --add-architecture i386 \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        clang lld wine wine64 lib32gcc-s1 jq xz-utils \
-    && rm -rf /var/lib/apt/lists/*
+# clang of the Rust toolchain's LLVM major from apt.llvm.org, with its
+# sanitizer runtime, for cargo-xwin and the nightly's sanitized builds
+# (setup-rust installs another major if the toolchain moved on); Wine for
+# the Windows tests; the 32-bit C runtime for SteamCMD, jq for the
+# workflows' scripts, xz for tools packed as .tar.xz. apt.llvm.org's key
+# (6084F3CF814B57C1CF12EFD515CF4D18AF4F7421) is checked against its SHA-256.
+#
+# Ubuntu's Wine 9, not WineHQ's stable 11: in a run of the platform's
+# Windows tests in this image on a GitHub-hosted runner, Wine 11's
+# wineserver failed ("socket: Function not implemented", 2026-10-27). It
+# moves once a run on the organization runners shows Wine 11 passes.
+ARG LLVM_MAJOR=23
+ARG LLVM_APT_SIGNER_SUM=8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN set -eu; \
+    dpkg --add-architecture i386; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl; \
+    install -d -m 0755 /etc/apt/keyrings; \
+    curl --proto '=https' --tlsv1.2 -sSfL -o /etc/apt/keyrings/apt-llvm.asc https://apt.llvm.org/llvm-snapshot.gpg.key; \
+    echo "$LLVM_APT_SIGNER_SUM  /etc/apt/keyrings/apt-llvm.asc" | sha256sum -c -; \
+    codename=$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release); \
+    echo "deb [signed-by=/etc/apt/keyrings/apt-llvm.asc] https://apt.llvm.org/$codename/ llvm-toolchain-$codename-$LLVM_MAJOR main" \
+      > "/etc/apt/sources.list.d/llvm-$LLVM_MAJOR.list"; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        "clang-$LLVM_MAJOR" "libclang-rt-$LLVM_MAJOR-dev" wine wine64 lib32gcc-s1 jq xz-utils; \
+    rm -rf /var/lib/apt/lists/*; \
+    # Ubuntu's packages carry no clang-cl; clang called by that name works
+    # as one. First on PATH, ahead of anything else named clang. It is cc
+    # and c++ too, which build scripts link with: the base image has no gcc,
+    # and apt.llvm.org's packages, unlike Ubuntu's clang, register no cc.
+    llvm="/usr/lib/llvm-$LLVM_MAJOR/bin"; \
+    for name in clang clang-cl cc; do ln -sf "$llvm/clang" "/usr/local/bin/$name"; done; \
+    for name in clang++ c++; do ln -sf "$llvm/clang++" "/usr/local/bin/$name"; done; \
+    clang-cl --version; \
+    wine --version
 
 # The cargo tools, prebuilt, checked against their published SHA-256 sums.
 # setup-rust skips a tool whose name@version is listed in
 # /opt/enshwick-tools; any other version it installs as before.
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN set -eu; \
     mkdir -p /opt/enshwick-tools; \
     tool() { \
@@ -37,8 +65,10 @@ RUN set -eu; \
     }; \
     tool cargo-xwin 0.23.1 c492c6dfb7e5ac0eee586b796e0fc950ba13077e7f0bbb046f445d71790d5360 \
       https://github.com/rust-cross/cargo-xwin/releases/download/v0.23.1/cargo-xwin-v0.23.1.x86_64-unknown-linux-musl.tar.gz cargo-xwin; \
-    tool sccache 0.18.0 45f1447fbe231e3037bde351ef70677dd212216c8d62ae7ca409fecc4d6acc89 \
-      https://github.com/mozilla/sccache/releases/download/v0.18.0/sccache-v0.18.0-x86_64-unknown-linux-musl.tar.gz sccache; \
+    tool sccache 0.19.0 aa73c7270c997894038c0d8f0d297865f57569e1687883322bc431713d4bb9dd \
+      https://github.com/mozilla/sccache/releases/download/v0.19.0/sccache-v0.19.0-x86_64-unknown-linux-musl.tar.gz sccache; \
+    # cargo-nextest 0.9.150 (2026-10-26) is not yet in install-action's
+    # manifests, which the hosted jobs install from; one version everywhere.
     tool cargo-nextest 0.9.149 d65c7f14bcb5c1566d1ecd534c5da8dedb81ba58586e478b0ab81c877d2bd8ad \
       https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.149/cargo-nextest-0.9.149-x86_64-unknown-linux-musl.tar.gz cargo-nextest; \
     tool cargo-deny 0.20.2 9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f \
