@@ -86,7 +86,8 @@ jobs:
           PATH="$dir/files/bin:$PATH" WINEPREFIX="$prefix" WINEDEBUG=-all
           export PATH WINEPREFIX WINEDEBUG
           wine --version
-          wineboot -i > /dev/null 2>&1
+          # GE-Proton carries Wine's programs, not its wineboot script.
+          wine wineboot -i > /dev/null 2>&1
           wineserver -w
           test -f "$prefix/system.reg"
 
