@@ -107,7 +107,12 @@ runs:
           if [ -z "$version" ]; then
             sudo apt-get update -qq
             for candidate in 22 21 20 19; do
-              if apt-cache show "clang-$candidate" > /dev/null 2>&1; then version=$candidate; break; fi
+              # Only a package with an installation candidate: a name other
+              # packages merely mention shows up too.
+              if apt-cache policy "clang-$candidate" 2> /dev/null | grep -q 'Candidate: [0-9]'; then
+                version=$candidate
+                break
+              fi
             done
             if [ -z "$version" ]; then
               echo "::error::clang $major is too old for the MSVC headers and the archive has no clang 19 or newer"
