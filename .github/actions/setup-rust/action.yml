@@ -44,21 +44,13 @@ runs:
           } >> "$GITHUB_ENV"
         fi
 
-    # The stock runner image has no C toolchain; cargo-xwin needs clang and
-    # lld. Downloaded packages stay in the tool cache between jobs.
-    - name: Install clang, lld and Wine
+    # Wine runs Windows test executables. Downloaded packages stay in the
+    # tool cache between jobs.
+    - name: Install Wine
+      if: inputs.wine == 'true'
       shell: bash
-      env:
-        WINE: ${{ inputs.wine }}
-        SANITIZERS: ${{ inputs.sanitizers }}
       run: |
-        packages=(clang lld)
-        if [ "$WINE" = true ]; then packages+=(wine wine64); fi
-        missing=()
-        for package in "${packages[@]}"; do
-          dpkg -s "$package" > /dev/null 2>&1 || missing+=("$package")
-        done
-        if [ ${#missing[@]} -gt 0 ]; then
+        if ! dpkg -s wine > /dev/null 2>&1 && ! command -v wine > /dev/null; then
           # Concurrent jobs share the cache, so apt works in a directory of
           # its own (it locks it) and the packages are copied in and out.
           shared="${RUNNER_TOOL_CACHE:-$HOME/.cache}/apt-archives"
@@ -67,73 +59,14 @@ runs:
           cp -n "$shared"/*.deb "$archives"/ 2> /dev/null || true
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Cache::archives="$archives" \
-            install -y -qq --no-install-recommends "${missing[@]}"
+            install -y -qq --no-install-recommends wine wine64
           cp -n "$archives"/*.deb "$shared"/ 2> /dev/null || true
         fi
-        if [ "$SANITIZERS" = true ] && ! echo '#include <sanitizer/asan_interface.h>' \
-            | clang -x c -fsyntax-only - 2> /dev/null; then
-          # The headers come with clang's runtime package, named by its
-          # major version; older releases kept them in libclang-common.
-          major=$(clang -dumpversion | cut -d. -f1)
-          sudo apt-get update -qq
-          for headers in "libclang-rt-$major-dev" "libclang-common-$major-dev"; do
-            if apt-cache show "$headers" > /dev/null 2>&1; then
-              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "$headers"
-              break
-            fi
-          done
+        # The runner image carries a prefix already.
+        if [ ! -f "${WINEPREFIX:-$HOME/.wine}/system.reg" ]; then
+          WINEDEBUG=-all wineboot -i > /dev/null 2>&1 || true
         fi
-        if [ "$WINE" = true ]; then
-          # The runner image carries a prefix already.
-          if [ ! -f "${WINEPREFIX:-$HOME/.wine}/system.reg" ]; then
-            WINEDEBUG=-all wineboot -i > /dev/null 2>&1 || true
-          fi
-          echo "WINEDEBUG=-all" >> "$GITHUB_ENV"
-        fi
-
-    # The MSVC STL headers cargo-xwin downloads refuse a clang-cl older
-    # than 19 (STL1000), which C++ dependencies such as Luau's hit. Where the
-    # distribution's clang is older, a newer one from its archive serves as
-    # clang-cl only; host builds keep the distribution's clang.
-    - name: A clang-cl the MSVC headers accept
-      shell: bash
-      run: | # zizmor: ignore[github-env] fixed paths only
-        major=$(clang -dumpversion | cut -d. -f1)
-        if [ "$major" -lt 19 ]; then
-          version=""
-          for candidate in 22 21 20 19; do
-            if [ -x "/usr/lib/llvm-$candidate/bin/clang" ]; then version=$candidate; break; fi
-          done
-          if [ -z "$version" ]; then
-            sudo apt-get update -qq
-            for candidate in 22 21 20 19; do
-              # Only a package with an installation candidate: a name other
-              # packages merely mention shows up too.
-              policy=$(apt-cache policy "clang-$candidate" 2> /dev/null)
-              if grep -q 'Candidate: [0-9]' <<< "$policy"; then
-                version=$candidate
-                break
-              fi
-            done
-            if [ -z "$version" ]; then
-              echo "::error::clang $major is too old for the MSVC headers and the archive has no clang 19 or newer"
-              exit 1
-            fi
-            shared="${RUNNER_TOOL_CACHE:-$HOME/.cache}/apt-archives"
-            archives="$RUNNER_TEMP/apt"
-            mkdir -p "$shared" "$archives/partial"
-            cp -n "$shared"/*.deb "$archives"/ 2> /dev/null || true
-            sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Cache::archives="$archives" \
-              install -y -qq --no-install-recommends "clang-$version"
-            cp -n "$archives"/*.deb "$shared"/ 2> /dev/null || true
-          fi
-          # Ubuntu's package carries no clang-cl; clang called by that name
-          # works as one.
-          mkdir -p "$RUNNER_TEMP/clang-cl"
-          ln -sf "/usr/lib/llvm-$version/bin/clang" "$RUNNER_TEMP/clang-cl/clang-cl"
-          echo "$RUNNER_TEMP/clang-cl" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/clang-cl/clang-cl" --version | head -n 1
-        fi
+        echo "WINEDEBUG=-all" >> "$GITHUB_ENV"
 
     - name: Install the toolchain
       shell: bash
@@ -145,6 +78,55 @@ runs:
         # Jobs share RUSTUP_HOME: one installs a new toolchain at a time.
         flock "$RUSTUP_HOME.lock" rustup toolchain install
         rustc --version
+
+    # clang of the Rust toolchain's own LLVM major, from apt.llvm.org, for
+    # the C and C++ that dependencies build: cargo-xwin calls it as
+    # clang-cl, the MSVC headers refuse an old one, and one LLVM keeps
+    # objects, sanitizer runtime and linker in step. The runner image
+    # carries it; elsewhere it is installed here, the packages kept in the
+    # tool cache. With `sanitizers`, also its sanitizer runtime and headers.
+    - name: clang of the toolchain's LLVM
+      shell: bash
+      env:
+        SANITIZERS: ${{ inputs.sanitizers }}
+        # The key apt.llvm.org signs with (6084F3CF814B57C1CF12EFD515CF4D18AF4F7421).
+        LLVM_KEY_SHA256: 8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d
+      run: | # zizmor: ignore[github-env] fixed paths only
+        major=$(rustc -vV | sed -n 's/^LLVM version: \([0-9]*\).*/\1/p')
+        test -n "$major"
+        llvm="/usr/lib/llvm-$major"
+        packages=()
+        [ -x "$llvm/bin/clang" ] || packages+=("clang-$major")
+        if [ "$SANITIZERS" = true ] && ! compgen -G "$llvm/lib/clang/*/include/sanitizer/asan_interface.h" > /dev/null; then
+          packages+=("libclang-rt-$major-dev")
+        fi
+        if [ ${#packages[@]} -gt 0 ]; then
+          codename=$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release)
+          key=/etc/apt/keyrings/apt-llvm.asc
+          if [ ! -f "$key" ]; then
+            curl --proto '=https' --tlsv1.2 -sSfL -o "$RUNNER_TEMP/llvm.asc" https://apt.llvm.org/llvm-snapshot.gpg.key
+            echo "$LLVM_KEY_SHA256  $RUNNER_TEMP/llvm.asc" | sha256sum -c -
+            sudo install -D -m 0644 "$RUNNER_TEMP/llvm.asc" "$key"
+          fi
+          echo "deb [signed-by=$key] https://apt.llvm.org/$codename/ llvm-toolchain-$codename-$major main" |
+            sudo tee "/etc/apt/sources.list.d/llvm-$major.list" > /dev/null
+          shared="${RUNNER_TOOL_CACHE:-$HOME/.cache}/apt-archives"
+          archives="$RUNNER_TEMP/apt"
+          mkdir -p "$shared" "$archives/partial"
+          cp -n "$shared"/*.deb "$archives"/ 2> /dev/null || true
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Cache::archives="$archives" \
+            install -y -qq --no-install-recommends "${packages[@]}"
+          cp -n "$archives"/*.deb "$shared"/ 2> /dev/null || true
+        fi
+        # Ahead of the distribution's clang. Ubuntu's packages carry no
+        # clang-cl; clang called by that name works as one.
+        mkdir -p "$RUNNER_TEMP/llvm"
+        ln -sf "$llvm/bin/clang" "$RUNNER_TEMP/llvm/clang"
+        ln -sf "$llvm/bin/clang" "$RUNNER_TEMP/llvm/clang-cl"
+        ln -sf "$llvm/bin/clang++" "$RUNNER_TEMP/llvm/clang++"
+        echo "$RUNNER_TEMP/llvm" >> "$GITHUB_PATH"
+        "$RUNNER_TEMP/llvm/clang-cl" --version | sed -n 1p
 
     # Windows binaries link with the toolchain's own lld (rust-lld, LLVM of
     # the pinned Rust) under the name lld-link, ahead of the distribution's
