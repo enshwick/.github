@@ -125,6 +125,12 @@ runs:
         ln -sf "$llvm/bin/clang" "$RUNNER_TEMP/llvm/clang"
         ln -sf "$llvm/bin/clang" "$RUNNER_TEMP/llvm/clang-cl"
         ln -sf "$llvm/bin/clang++" "$RUNNER_TEMP/llvm/clang++"
+        # Build scripts link with cc. A runner without one, as an image built
+        # on apt.llvm.org's packages alone, takes this clang as cc and c++.
+        if ! command -v cc > /dev/null; then
+          ln -sf "$llvm/bin/clang" "$RUNNER_TEMP/llvm/cc"
+          ln -sf "$llvm/bin/clang++" "$RUNNER_TEMP/llvm/c++"
+        fi
         echo "$RUNNER_TEMP/llvm" >> "$GITHUB_PATH"
         "$RUNNER_TEMP/llvm/clang-cl" --version | sed -n 1p
 
