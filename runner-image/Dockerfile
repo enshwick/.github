@@ -1,9 +1,10 @@
 # The organization runners' image: GitHub's actions-runner with what every
 # Rust job would otherwise install at its start: the apt packages, the cargo
 # tools at the versions the shared workflows ask for (cargo-xwin, sccache,
-# cargo-nextest, cargo-deny, cargo-cyclonedx, cargo-auditable), and a Wine prefix.
-# Rust and the Windows SDK stay in the runners' persistent tool cache, where
-# setup-rust finds them without a download and keeps them current.
+# cargo-nextest, cargo-deny, cargo-cyclonedx, cargo-auditable). Rust, the
+# Windows SDK and GE-Proton's Wine stay in the runners' persistent tool
+# cache, where setup-rust finds them without a download and keeps them
+# current.
 FROM ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232
 
 LABEL org.opencontainers.image.source=https://github.com/enshwick/.github \
@@ -13,20 +14,16 @@ USER root
 
 # clang of the Rust toolchain's LLVM major from apt.llvm.org, with its
 # sanitizer runtime, for cargo-xwin and the nightly's sanitized builds
-# (setup-rust installs another major if the toolchain moved on); Wine for
-# the Windows tests; the 32-bit C runtime for SteamCMD, jq for the
-# workflows' scripts, xz for tools packed as .tar.xz. apt.llvm.org's key
+# (setup-rust installs another major if the toolchain moved on); the
+# 32-bit C runtime for SteamCMD, jq for the workflows' scripts, xz for
+# tools packed as .tar.xz. apt.llvm.org's key
 # (6084F3CF814B57C1CF12EFD515CF4D18AF4F7421) is checked against its SHA-256.
-#
-# Ubuntu's Wine 9, not WineHQ's stable 11: in a run of the platform's
-# Windows tests in this image on a GitHub-hosted runner, Wine 11's
-# wineserver failed ("socket: Function not implemented", 2026-10-27). It
-# moves once a run on the organization runners shows Wine 11 passes.
+# No Wine here: setup-rust sets up GE-Proton's, which loads FreeType
+# for its fonts.
 ARG LLVM_MAJOR=23
 ARG LLVM_APT_SIGNER_SUM=8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN set -eu; \
-    dpkg --add-architecture i386; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl; \
     install -d -m 0755 /etc/apt/keyrings; \
@@ -37,7 +34,7 @@ RUN set -eu; \
       > "/etc/apt/sources.list.d/llvm-$LLVM_MAJOR.list"; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        "clang-$LLVM_MAJOR" "libclang-rt-$LLVM_MAJOR-dev" wine wine64 lib32gcc-s1 jq xz-utils; \
+        "clang-$LLVM_MAJOR" "libclang-rt-$LLVM_MAJOR-dev" libfreetype6 lib32gcc-s1 jq xz-utils; \
     rm -rf /var/lib/apt/lists/*; \
     # Ubuntu's packages carry no clang-cl; clang called by that name works
     # as one. First on PATH, ahead of anything else named clang. It is cc
@@ -46,8 +43,7 @@ RUN set -eu; \
     llvm="/usr/lib/llvm-$LLVM_MAJOR/bin"; \
     for name in clang clang-cl cc; do ln -sf "$llvm/clang" "/usr/local/bin/$name"; done; \
     for name in clang++ c++; do ln -sf "$llvm/clang++" "/usr/local/bin/$name"; done; \
-    clang-cl --version; \
-    wine --version
+    clang-cl --version
 
 # The cargo tools, prebuilt, checked against their published SHA-256 sums.
 # setup-rust skips a tool whose name@version is listed in
@@ -82,7 +78,3 @@ RUN set -eu; \
     for t in cargo-xwin sccache cargo-nextest cargo-deny cargo-cyclonedx; do "/usr/local/bin/$t" --version > /dev/null 2>&1 || "/usr/local/bin/$t" "${t#cargo-}" --version; done
 
 USER runner
-
-# The Wine prefix, made once here instead of by every Wine job (8 s).
-# wineboot returns before wineserver has written the registry.
-RUN WINEDEBUG=-all wineboot -i > /dev/null 2>&1; wineserver -w; ls "$HOME/.wine"; test -f "$HOME/.wine/system.reg"
