@@ -10,6 +10,9 @@ inputs:
   wine:
     description: Install Wine to run Windows test executables.
     default: "false"
+  sanitizers:
+    description: Install clang's sanitizer headers, for C and C++ that dependencies build under a sanitizer.
+    default: "false"
   gh:
     description: Install the GitHub CLI, for steps that publish releases.
     default: "false"
@@ -47,6 +50,7 @@ runs:
       shell: bash
       env:
         WINE: ${{ inputs.wine }}
+        SANITIZERS: ${{ inputs.sanitizers }}
       run: |
         packages=(clang lld)
         if [ "$WINE" = true ]; then packages+=(wine wine64); fi
@@ -65,6 +69,19 @@ runs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Cache::archives="$archives" \
             install -y -qq --no-install-recommends "${missing[@]}"
           cp -n "$archives"/*.deb "$shared"/ 2> /dev/null || true
+        fi
+        if [ "$SANITIZERS" = true ] && ! echo '#include <sanitizer/asan_interface.h>' \
+            | clang -x c -fsyntax-only - 2> /dev/null; then
+          # The headers come with clang's runtime package, named by its
+          # major version; older releases kept them in libclang-common.
+          major=$(clang -dumpversion | cut -d. -f1)
+          sudo apt-get update -qq
+          for headers in "libclang-rt-$major-dev" "libclang-common-$major-dev"; do
+            if apt-cache show "$headers" > /dev/null 2>&1; then
+              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "$headers"
+              break
+            fi
+          done
         fi
         if [ "$WINE" = true ]; then
           # The runner image carries a prefix already.
