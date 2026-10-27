@@ -102,12 +102,18 @@ runs:
         if [ "$major" -lt 19 ]; then
           version=""
           for candidate in 22 21 20 19; do
-            if [ -x "/usr/lib/llvm-$candidate/bin/clang-cl" ]; then version=$candidate; break; fi
+            if [ -x "/usr/lib/llvm-$candidate/bin/clang" ]; then version=$candidate; break; fi
           done
           if [ -z "$version" ]; then
             sudo apt-get update -qq
             for candidate in 22 21 20 19; do
-              if apt-cache show "clang-$candidate" > /dev/null 2>&1; then version=$candidate; break; fi
+              # Only a package with an installation candidate: a name other
+              # packages merely mention shows up too.
+              policy=$(apt-cache policy "clang-$candidate" 2> /dev/null)
+              if grep -q 'Candidate: [0-9]' <<< "$policy"; then
+                version=$candidate
+                break
+              fi
             done
             if [ -z "$version" ]; then
               echo "::error::clang $major is too old for the MSVC headers and the archive has no clang 19 or newer"
@@ -121,8 +127,10 @@ runs:
               install -y -qq --no-install-recommends "clang-$version"
             cp -n "$archives"/*.deb "$shared"/ 2> /dev/null || true
           fi
+          # Ubuntu's package carries no clang-cl; clang called by that name
+          # works as one.
           mkdir -p "$RUNNER_TEMP/clang-cl"
-          ln -sf "/usr/lib/llvm-$version/bin/clang-cl" "$RUNNER_TEMP/clang-cl/clang-cl"
+          ln -sf "/usr/lib/llvm-$version/bin/clang" "$RUNNER_TEMP/clang-cl/clang-cl"
           echo "$RUNNER_TEMP/clang-cl" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/clang-cl/clang-cl" --version | head -n 1
         fi
