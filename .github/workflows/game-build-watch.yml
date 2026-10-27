@@ -33,7 +33,7 @@ jobs:
   # Only API calls: on a GitHub-hosted runner, so a frequent schedule costs
   # the organization runners nothing.
   watch:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: read
