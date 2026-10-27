@@ -42,10 +42,12 @@ RUN set -eu; \
         "clang-$LLVM_MAJOR" "libclang-rt-$LLVM_MAJOR-dev" winehq-stable lib32gcc-s1 jq xz-utils; \
     rm -rf /var/lib/apt/lists/*; \
     # Ubuntu's packages carry no clang-cl; clang called by that name works
-    # as one. First on PATH, ahead of anything else named clang.
-    for name in clang clang++ clang-cl; do \
-      ln -sf "/usr/lib/llvm-$LLVM_MAJOR/bin/${name/clang-cl/clang}" "/usr/local/bin/$name"; \
-    done; \
+    # as one. First on PATH, ahead of anything else named clang. It is cc
+    # and c++ too, which build scripts link with: the base image has no gcc,
+    # and apt.llvm.org's packages, unlike Ubuntu's clang, register no cc.
+    llvm="/usr/lib/llvm-$LLVM_MAJOR/bin"; \
+    for name in clang clang-cl cc; do ln -sf "$llvm/clang" "/usr/local/bin/$name"; done; \
+    for name in clang++ c++; do ln -sf "$llvm/clang++" "/usr/local/bin/$name"; done; \
     clang-cl --version; \
     wine --version
 
