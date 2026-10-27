@@ -164,7 +164,7 @@ runs:
       id: tools
       shell: bash
       env:
-        TOOLS: cargo-xwin@0.23.1,sccache@0.18.0${{ inputs.tools != '' && format(',{0}', inputs.tools) || '' }}
+        TOOLS: cargo-xwin@0.23.1,sccache@0.19.0${{ inputs.tools != '' && format(',{0}', inputs.tools) || '' }}
       run: |
         missing=()
         IFS=, read -ra wanted <<< "$TOOLS"
@@ -177,7 +177,7 @@ runs:
     # a version it lacks falls back to cargo-binstall, which fails in the
     # per-job tools directory.
     - if: steps.tools.outputs.missing != ''
-      uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
+      uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
       with:
         tool: ${{ steps.tools.outputs.missing }}
 
@@ -192,8 +192,8 @@ runs:
       if: inputs.gh == 'true'
       shell: bash
       env:
-        GH_VERSION: 2.102.0
-        GH_SHA256: bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386
+        GH_VERSION: 2.103.3
+        GH_SHA256: 4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d
       run: | # zizmor: ignore[github-env] fixed paths only
         dir="${RUNNER_TOOL_CACHE:-$HOME/.cache}/gh/$GH_VERSION"
         if [ ! -x "$dir/bin/gh" ]; then

@@ -180,6 +180,7 @@ jobs:
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
         if: env.ON_PC != 'true'
         with:
+          # cargo-nextest 0.9.150 (2026-10-26) is not yet in install-action's manifests.
           tools: cargo-nextest@0.9.149,cargo-deny@0.20.2${{ inputs.semver != '' && matrix.part != 'windows-lint' && ',cargo-semver-checks@0.51.0' || '' }}
           wine: ${{ matrix.part == 'all' && inputs.windows-tests }}
 
@@ -495,6 +496,7 @@ jobs:
 
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
         with:
+          # cargo-nextest 0.9.150 (2026-10-26) is not yet in install-action's manifests.
           tools: cargo-nextest@0.9.149
 
       - name: Windows tests to run

@@ -38,8 +38,8 @@ jobs:
       # uv runs copier; the checked release stays in the tool cache.
       - name: Install uv
         env:
-          UV_VERSION: 0.12.24
-          UV_SHA256: b4dfaef47d491a7296981f8374a4595f55dbf84e8937c8ecd2983574d8bb3da6
+          UV_VERSION: 0.13.6
+          UV_SHA256: f29c3e94ffabd7e6f3ba521dba169a9b7ec12100bf3257087f0f24f6123f3645
         run: | # zizmor: ignore[github-env] fixed paths only
           dir="${RUNNER_TOOL_CACHE:-$HOME/.cache}/uv/$UV_VERSION"
           if [ ! -x "$dir/uv" ]; then
