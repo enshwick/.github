@@ -36,7 +36,7 @@ on:
         type: string
         default: ""
       asan:
-        description: cargo test arguments for the tests to run under AddressSanitizer, such as `-p a-crate --lib`; none when empty.
+        description: cargo nextest run arguments for the tests to run under AddressSanitizer, such as `-p a-crate --lib`; none when empty.
         type: string
         default: ""
 
@@ -191,8 +191,10 @@ jobs:
           # clang's LLVM brings one.
           symbolizer=$(compgen -G '/usr/lib/llvm-*/bin/llvm-symbolizer' | sort -V | tail -n 1 || true)
           if [ -n "$symbolizer" ]; then export ASAN_SYMBOLIZER_PATH="$symbolizer"; fi
+          # nextest runs each test in a process of its own, as the merge
+          # gate does: tests that keep a mod's state in a static rely on it.
           # shellcheck disable=SC2086 # one word per argument
-          cargo "+$NIGHTLY" test --target "$host" --target-dir target/asan $ARGS
+          cargo "+$NIGHTLY" nextest run --no-fail-fast --target "$host" --target-dir target/asan $ARGS
 
       # A crash fails the step and keeps its input as an artifact. What the
       # runs find stays on the runner: the committed corpus is the seeds.
