@@ -91,6 +91,42 @@ runs:
           echo "WINEDEBUG=-all" >> "$GITHUB_ENV"
         fi
 
+    # The MSVC STL headers cargo-xwin downloads refuse a clang-cl older
+    # than 19 (STL1000), which C++ dependencies such as Luau's hit. Where the
+    # distribution's clang is older, a newer one from its archive serves as
+    # clang-cl only; host builds keep the distribution's clang.
+    - name: A clang-cl the MSVC headers accept
+      shell: bash
+      run: | # zizmor: ignore[github-env] fixed paths only
+        major=$(clang -dumpversion | cut -d. -f1)
+        if [ "$major" -lt 19 ]; then
+          version=""
+          for candidate in 22 21 20 19; do
+            if [ -x "/usr/lib/llvm-$candidate/bin/clang-cl" ]; then version=$candidate; break; fi
+          done
+          if [ -z "$version" ]; then
+            sudo apt-get update -qq
+            for candidate in 22 21 20 19; do
+              if apt-cache show "clang-$candidate" > /dev/null 2>&1; then version=$candidate; break; fi
+            done
+            if [ -z "$version" ]; then
+              echo "::error::clang $major is too old for the MSVC headers and the archive has no clang 19 or newer"
+              exit 1
+            fi
+            shared="${RUNNER_TOOL_CACHE:-$HOME/.cache}/apt-archives"
+            archives="$RUNNER_TEMP/apt"
+            mkdir -p "$shared" "$archives/partial"
+            cp -n "$shared"/*.deb "$archives"/ 2> /dev/null || true
+            sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Cache::archives="$archives" \
+              install -y -qq --no-install-recommends "clang-$version"
+            cp -n "$archives"/*.deb "$shared"/ 2> /dev/null || true
+          fi
+          mkdir -p "$RUNNER_TEMP/clang-cl"
+          ln -sf "/usr/lib/llvm-$version/bin/clang-cl" "$RUNNER_TEMP/clang-cl/clang-cl"
+          echo "$RUNNER_TEMP/clang-cl" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/clang-cl/clang-cl" --version | head -n 1
+        fi
+
     - name: Install the toolchain
       shell: bash
       run: |
