@@ -274,6 +274,8 @@ jobs:
       run:
         shell: bash
     env:
+      # Only the default branch's own runs fill the caches its runs restore.
+      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
       # Git settings for this job only: the ten runners share one user
       # profile, and writing its global config at once fails on the lock.
       # Long paths for the work tree; no CRLF, which rustfmt rejects.
@@ -298,6 +300,8 @@ jobs:
           persist-credentials: false
 
       - uses: ./.enshwick-ci/.github/actions/setup-rust-windows # zizmor: ignore[self-repository]
+        with:
+          trust: ${{ env.TRUST }}
 
       - name: Windows lint
         run: |
@@ -324,6 +328,8 @@ jobs:
       run:
         shell: bash
     env:
+      # Only the default branch's own runs fill the caches its runs restore.
+      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
       # Git settings for this job only: the ten runners share one user
       # profile, and writing its global config at once fails on the lock.
       # Long paths for the work tree; no CRLF, which rustfmt rejects.
@@ -354,6 +360,8 @@ jobs:
         run: git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
 
       - uses: ./.enshwick-ci/.github/actions/setup-rust-windows # zizmor: ignore[self-repository]
+        with:
+          trust: ${{ env.TRUST }}
 
       - name: cargo xtask check
         run: |
@@ -380,6 +388,8 @@ jobs:
       run:
         shell: bash
     env:
+      # Only the default branch's own runs fill the caches its runs restore.
+      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
       # Git settings for this job only: the ten runners share one user
       # profile, and writing its global config at once fails on the lock.
       # Long paths for the work tree; no CRLF, which rustfmt rejects.
@@ -409,6 +419,8 @@ jobs:
         run: git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
 
       - uses: ./.enshwick-ci/.github/actions/setup-rust-windows # zizmor: ignore[self-repository]
+        with:
+          trust: ${{ env.TRUST }}
 
       # cargo-xwin's environment, then plain cargo: the tests run natively
       # (no runner) and cargo's exit status reaches the job. One test thread,
