@@ -26,8 +26,10 @@ on:
 permissions: {}
 
 jobs:
+  # Only API calls: on a GitHub-hosted runner, so a frequent schedule costs
+  # the organization runners nothing.
   watch:
-    runs-on: enshwick
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -36,6 +38,7 @@ jobs:
       server-build: ${{ steps.builds.outputs.server-build }}
       server-manifest: ${{ steps.builds.outputs.server-manifest }}
       server-has-table: ${{ steps.builds.outputs.server-has-table }}
+      seed: ${{ steps.builds.outputs.seed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -47,7 +50,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TABLES: ${{ inputs.tables }}
+          EVENT: ${{ github.event_name }}
         run: |
+          seed=false
+          if [ "$EVENT" = workflow_dispatch ] || [ "$(date -u +%H)" = 03 ]; then seed=true; fi
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
           for entry in server:2278520 client:1203620; do
             side=${entry%%:*}
             app=${entry#*:}
@@ -101,7 +108,12 @@ jobs:
   # that owns the game and stays with the issue.
   server-pin:
     needs: watch
-    if: inputs.pin && needs.watch.outputs.server-build != ''
+    # A build without a table, or, to keep the executable of the current
+    # tabled build (say a person wrote its table), a run by hand or the
+    # tick in the 03:00 UTC hour (a no-op once the file is kept).
+    if: >-
+      inputs.pin && needs.watch.outputs.server-build != ''
+      && (needs.watch.outputs.server-has-table != 'true' || needs.watch.outputs.seed == 'true')
     runs-on: enshwick
     timeout-minutes: 45
     permissions:
