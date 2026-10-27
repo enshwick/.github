@@ -70,6 +70,9 @@ jobs:
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
         with:
           tools: cargo-nextest@0.9.149,cargo-udeps@0.1.61,cargo-llvm-cov@0.9.1
+          # Fuzz and sanitizer builds compile dependencies' C and C++
+          # under the sanitizer too.
+          sanitizers: ${{ inputs.fuzz || inputs.asan != '' }}
 
       - name: Toolchains and the packages to check
         id: scope

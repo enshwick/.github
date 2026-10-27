@@ -40,6 +40,9 @@ jobs:
           path: .enshwick-ci
           persist-credentials: false
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
+        with:
+          # Fuzz builds compile dependencies' C and C++ under the sanitizer.
+          sanitizers: true
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # A cache saved by a failed run would be restored as it is and
