@@ -42,40 +42,13 @@ jobs:
           gh: true
           tools: cargo-cyclonedx@0.5.9,cargo-auditable@0.7.7
 
-      # The stock runner image has no gh, which looks up the mods' dev
-      # prereleases and publishes this one. The release binary, checked
-      # against its published checksum, stays in the tool cache; apt would
-      # race other jobs for the shared archive lock.
-      # The token reads the dev prereleases of the mods' own repositories.
-      # Reproducible builds: no machine paths in the DLLs and PDBs, no
-      # timestamps from the linker, and the PDB named without its path.
-      - name: Reproducible build flags
-        run: | # zizmor: ignore[github-env] fixed paths only
-          {
-            echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS=--remap-path-prefix=$GITHUB_WORKSPACE=/build --remap-path-prefix=$CARGO_HOME=/cargo --remap-path-prefix=$RUSTUP_HOME=/rustup -C link-arg=/Brepro -C link-arg=/PDBALTPATH:%_PDB%"
-            echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)"
-          } >> "$GITHUB_ENV"
-
-      - name: cargo xtask bundle
-        env:
-          GH_TOKEN: ${{ github.token }}
-          # Each DLL carries its dependency tree, for `cargo audit bin`.
-          ENSHWICK_AUDITABLE: "1"
-        run: cargo xtask bundle --out "$RUNNER_TEMP/dev"
-
-      # A CycloneDX SBOM and the PDB of every DLL this build made.
-      - name: SBOMs and PDBs
-        run: |
-          cargo cyclonedx --format json --target x86_64-pc-windows-msvc --no-build-deps
-          cargo metadata --no-deps --format-version 1 | jq -r '
-            .packages[] | . as $p | .targets[] | select(.kind | index("cdylib"))
-            | [($p.manifest_path | sub("/Cargo.toml$"; "")), $p.name, (.name | gsub("-"; "_"))] | @tsv' |
-            while IFS=$'\t' read -r dir package lib; do
-              pdb="target/x86_64-pc-windows-msvc/release/$lib.pdb"
-              [ -f "$pdb" ] || continue
-              cp "$dir/$package.cdx.json" "$RUNNER_TEMP/dev/"
-              [ -f "$RUNNER_TEMP/dev/$package.pdb" ] || cp "$pdb" "$RUNNER_TEMP/dev/$package.pdb"
-            done
+      # The archives, and the PDB and SBOM of every DLL. The token reads
+      # release assets, such as the mods' own dev prereleases.
+      - uses: ./.enshwick-ci/.github/actions/release-files # zizmor: ignore[self-repository]
+        with:
+          task: bundle
+          out: ${{ runner.temp }}/dev
+          token: ${{ github.token }}
 
       - name: Build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2

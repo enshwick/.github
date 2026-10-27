@@ -1,0 +1,115 @@
+name: Release assets
+
+# The files a release carries, built on the organization runners from the
+# release's tag: the archives of `cargo xtask dist` (a mod) or `cargo xtask
+# bundle` (the platform), the PDB and CycloneDX SBOM of every DLL, a
+# SHA256SUMS file, and a build provenance attestation of each, which players
+# check with `gh attestation verify <file> --owner enshwick`. The caller runs
+# it after release-plz's `release` made the GitHub release, and grants
+# `contents: write`, `id-token: write` and `attestations: write`.
+#
+# A dry run builds the same files from the named ref or the commit it runs
+# on, lists them with their sums in the run summary, and attests and uploads
+# nothing: no release has to exist.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The release's tag, which the files build from and attach to; a dry run takes any ref, or the commit it runs on when empty.
+        type: string
+        default: ""
+      task:
+        description: The xtask that writes the archives, dist or bundle.
+        type: string
+        default: dist
+      dry-run:
+        description: Build and list the files only.
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  assets:
+    runs-on: enshwick
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      TAG: ${{ inputs.tag }}
+      DRY_RUN: ${{ inputs.dry-run }}
+    steps:
+      - name: Where the files go
+        run: echo "OUT=$RUNNER_TEMP/release" >> "$GITHUB_ENV" # zizmor: ignore[github-env] a fixed path
+
+      - name: A release to attach to
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$TAG" ]; then echo "::error::name the release's tag"; exit 1; fi
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName > /dev/null
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+
+      # Checked out and used by path, as in rust-ci.yml.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: enshwick/.github
+          ref: main
+          path: .enshwick-ci
+          persist-credentials: false
+      - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
+        with:
+          gh: true
+          tools: cargo-cyclonedx@0.5.9,cargo-auditable@0.7.7
+
+      - uses: ./.enshwick-ci/.github/actions/release-files # zizmor: ignore[self-repository]
+        with:
+          task: ${{ inputs.task }}
+          out: ${{ env.OUT }}
+          token: ${{ github.token }}
+
+      - name: Sums
+        working-directory: ${{ env.OUT }}
+        run: |
+          shopt -s nullglob
+          files=(*.zip *.pdb *.cdx.json)
+          if [ ${#files[@]} = 0 ]; then echo "::error::the build wrote no files"; exit 1; fi
+          sha256sum "${files[@]}" > SHA256SUMS
+          {
+            echo "### Release files of ${TAG:-$(git -C "$GITHUB_WORKSPACE" rev-parse --short=7 HEAD)}"
+            echo
+            echo "| File | Bytes | SHA-256 |"
+            echo "| --- | ---: | --- |"
+            for file in "${files[@]}" SHA256SUMS; do
+              echo "| $file | $(stat -c %s "$file") | \`$(sha256sum "$file" | cut -d' ' -f1)\` |"
+            done
+            if [ "$DRY_RUN" = true ]; then echo; echo "Dry run: nothing attested or uploaded."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build provenance
+        if: ${{ !inputs.dry-run }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ env.OUT }}/*
+
+      - name: Attach to the release
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: ${{ env.OUT }}
+        run: |
+          shopt -s nullglob
+          files=(./*.zip ./*.pdb ./*.cdx.json ./SHA256SUMS)
+          gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: sccache statistics
+        if: always() && env.RUSTC_WRAPPER == 'sccache'
+        run: command -v sccache > /dev/null && sccache --show-stats || true
