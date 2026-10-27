@@ -17,6 +17,10 @@ on:
         description: Port a new server build's table with `cargo enshwick pin` and open a pull request; needs the enshwick-ci secrets and a writable /ci-cache.
         type: boolean
         default: false
+      rehearse:
+        description: With pin, port the current server build's table from that build itself and run the compat report on it, then show the pull request it would open in the run summary instead of pushing it.
+        type: boolean
+        default: false
     secrets:
       ENSHWICK_CI_CLIENT_ID:
         required: false
@@ -90,6 +94,11 @@ jobs:
               [ -z "$updated" ] || echo "since $(date -u -d "@$updated" '+%F %H:%M') UTC"
               echo "and no build table names it. Until one does, the loader runs this build on"
               echo "the code patterns of the newest table, and what they miss stays off."
+              if [ "$side" = client ]; then
+                echo
+                echo "The client's executable downloads only with a Steam account that owns the"
+                echo "game, which this watch does not have yet, so no pull request follows."
+              fi
               echo
               echo "Port the table with \`cargo enshwick pin\` against the previous build's"
               echo "executable, as [its README](https://github.com/$GITHUB_REPOSITORY/blob/main/crates/cargo-enshwick/README.md#porting-build-rows-pin)"
@@ -100,12 +109,13 @@ jobs:
           done
 
   # A new server build: its executable next to the previous one on the
-  # runners' volume, `cargo enshwick pin` from one to the other, and a pull
-  # request with the new table. It merges on its own when the tool proved
-  # every entry; otherwise it waits for a person. While the build has a
-  # table, the job only keeps its executable for the next update. The
-  # executables never leave the volume. The client needs a Steam account
-  # that owns the game and stays with the issue.
+  # runners' volume, `cargo enshwick pin` from one to the other, the compat
+  # report of the new table on the new executable, and a pull request with
+  # both. It merges on its own when the tool proved every entry and every
+  # loader feature has what it needs; otherwise it waits for a person. While
+  # the build has a table, the job only keeps its executable for the next
+  # update. The executables never leave the volume. The client needs a Steam
+  # account that owns the game and stays with the issue.
   server-pin:
     needs: watch
     # A build without a table, or, to keep the executable of the current
@@ -113,7 +123,7 @@ jobs:
     # tick in the 03:00 UTC hour (a no-op once the file is kept).
     if: >-
       inputs.pin && needs.watch.outputs.server-build != ''
-      && (needs.watch.outputs.server-has-table != 'true' || needs.watch.outputs.seed == 'true')
+      && (needs.watch.outputs.server-has-table != 'true' || needs.watch.outputs.seed == 'true' || inputs.rehearse)
     runs-on: enshwick
     timeout-minutes: 45
     permissions:
@@ -121,7 +131,9 @@ jobs:
     env:
       BUILD: ${{ needs.watch.outputs.server-build }}
       MANIFEST: ${{ needs.watch.outputs.server-manifest }}
-      HAS_TABLE: ${{ needs.watch.outputs.server-has-table }}
+      # A rehearsal works as if the build had no table, and pushes nothing.
+      HAS_TABLE: ${{ !inputs.rehearse && needs.watch.outputs.server-has-table }}
+      REHEARSE: ${{ inputs.rehearse }}
       TABLES: ${{ inputs.tables }}
       GAME: /ci-cache/game/server
       DEPOTDOWNLOADER_VERSION: 3.4.0
@@ -171,6 +183,8 @@ jobs:
             [ "$dir" -lt "$BUILD" ] || continue
             grep -qx "steam_build = $dir" "$TABLES"/server-*.toml 2> /dev/null && old=$dir
           done
+          # A rehearsal ports the build from itself.
+          if [ "$REHEARSE" = true ]; then old=$BUILD; fi
           echo "old=$old" >> "$GITHUB_OUTPUT"
           # Three builds are enough to port from.
           find "$GAME" -mindepth 1 -maxdepth 1 -type d -name '[0-9]*' -printf '%f\n' | sort -n | head -n -3 \
@@ -180,8 +194,11 @@ jobs:
       - if: env.HAS_TABLE != 'true' && steps.exe.outputs.old == ''
         run: echo "::warning::no earlier server executable is kept; the issue stays for a person"
 
+      # Wine runs the compat report, which needs the loader's Windows build.
       - if: env.HAS_TABLE != 'true' && steps.exe.outputs.old != ''
         uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
+        with:
+          wine: true
 
       - name: cargo enshwick pin
         id: pin
@@ -190,9 +207,11 @@ jobs:
           OLD: ${{ steps.exe.outputs.old }}
         run: |
           status=0
+          write=(--write)
+          if [ "$REHEARSE" = true ]; then write=(); fi
           cargo run --release -q -p cargo-enshwick -- enshwick pin \
             --old "$GAME/$OLD/enshrouded_server.exe" --new "$GAME/$BUILD/enshrouded_server.exe" \
-            --steam-build "$BUILD" --write --report "$RUNNER_TEMP/pin.md" || status=$?
+            --steam-build "$BUILD" "${write[@]}" --report "$RUNNER_TEMP/pin.md" || status=$?
           case "$status" in
             0) echo "complete=true" >> "$GITHUB_OUTPUT" ;;
             2) echo "complete=false" >> "$GITHUB_OUTPUT" ;;
@@ -200,9 +219,33 @@ jobs:
           esac
           git status --short
 
+      # Which loader features the new table carries on the new executable:
+      # the loader's Windows build, with the table just written embedded,
+      # under Wine. A report that cannot be made keeps the pull request for
+      # a person instead of failing the job.
+      - name: cargo xtask compat
+        id: compat
+        if: steps.pin.outcome == 'success'
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER: wine
+        run: |
+          status=0
+          cargo xwin run --release -q --target x86_64-pc-windows-msvc -p xtask --features compat -- \
+            compat "$GAME/$BUILD/enshrouded_server.exe" --report "$RUNNER_TEMP/compat.md" || status=$?
+          case "$status" in
+            0) works=true ;;
+            2) works=false ;;
+            *)
+              works=unknown
+              echo "::warning::the compat report failed with exit code $status"
+              echo "The compat report could not be made (exit code $status); see the run's log." > "$RUNNER_TEMP/compat.md"
+              ;;
+          esac
+          echo "works=$works" >> "$GITHUB_OUTPUT"
+
       - name: Mint the enshwick-ci token
         id: token
-        if: steps.pin.outcome == 'success'
+        if: steps.pin.outcome == 'success' && env.REHEARSE != 'true'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ secrets.ENSHWICK_CI_CLIENT_ID }}
@@ -211,17 +254,66 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
 
-      # Opened with the app, so CI runs on it.
+      # Opened with the app, so CI runs on it. A rehearsal shows the body in
+      # the run summary and pushes nothing.
       - name: Pull request
         if: steps.pin.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           COMPLETE: ${{ steps.pin.outputs.complete }}
+          WORKS: ${{ steps.compat.outputs.works }}
           OLD: ${{ steps.exe.outputs.old }}
         run: |
           branch="game/server-$BUILD"
-          if [ "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state all --json number --jq length)" != 0 ]; then
+          if [ "$REHEARSE" != true ] &&
+            [ "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state all --json number --jq length)" != 0 ]; then
             echo "a pull request for $branch exists"
+            exit 0
+          fi
+          issue=""
+          if [ "$REHEARSE" != true ]; then
+            title="Game server build $BUILD has no build table"
+            issue=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" \
+              --json number --jq '.[0].number // empty')
+          fi
+          automerge=false
+          if [ "$COMPLETE" = true ] && [ "$WORKS" = true ]; then automerge=true; fi
+          {
+            echo "## Features"
+            echo
+            echo "- Added the build table of server build $BUILD, ported by \`cargo enshwick pin\` from build $OLD."
+            if [ "$COMPLETE" != true ]; then
+              echo "- Some entries need a person (pin report below); this waits for a review."
+            fi
+            case "$WORKS" in
+              true) echo "- Every loader feature has what it needs on this build (compat report below)." ;;
+              false) echo "- Some loader features stay off on this build (compat report below); this waits for a review." ;;
+              *) echo "- The compat report could not be made; this waits for a review." ;;
+            esac
+            if [ "$automerge" = true ]; then
+              echo "- Merges on its own once CI passes."
+            fi
+            [ -z "$issue" ] || { echo; echo "Closes #$issue"; }
+            echo
+            echo "<details><summary>pin report</summary>"
+            echo
+            cat "$RUNNER_TEMP/pin.md"
+            echo
+            echo "</details>"
+            echo
+            echo "<details><summary>compat report</summary>"
+            echo
+            cat "$RUNNER_TEMP/compat.md"
+            echo
+            echo "</details>"
+          } > "$RUNNER_TEMP/body.md"
+          if [ "$REHEARSE" = true ]; then
+            {
+              echo "Rehearsal: the pull request \`feat(gamedata): build table of server build $BUILD\` would read"
+              echo "(auto-merge: $automerge):"
+              echo
+              cat "$RUNNER_TEMP/body.md"
+            } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           git switch -c "$branch"
@@ -232,27 +324,7 @@ jobs:
             -c user.email="347820590+enshwick-ci[bot]@users.noreply.github.com" \
             commit -q -m "feat(gamedata): build table of server build $BUILD"
           git push -q "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$branch"
-          title="Game server build $BUILD has no build table"
-          issue=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" \
-            --json number --jq '.[0].number // empty')
-          {
-            echo "## Features"
-            echo
-            echo "- Added the build table of server build $BUILD, ported by \`cargo enshwick pin\` from build $OLD."
-            if [ "$COMPLETE" = true ]; then
-              echo "- The tool proved every entry; this merges on its own once CI passes."
-            else
-              echo "- Some entries need a person (below); this waits for a review."
-            fi
-            [ -z "$issue" ] || { echo; echo "Closes #$issue"; }
-            echo
-            echo "<details><summary>pin report</summary>"
-            echo
-            cat "$RUNNER_TEMP/pin.md"
-            echo
-            echo "</details>"
-          } > "$RUNNER_TEMP/body.md"
           url=$(gh pr create --repo "$GITHUB_REPOSITORY" --head "$branch" \
             --title "feat(gamedata): build table of server build $BUILD" --body-file "$RUNNER_TEMP/body.md")
           echo "$url"
-          if [ "$COMPLETE" = true ]; then gh pr merge "$url" --auto --squash; fi
+          if [ "$automerge" = true ]; then gh pr merge "$url" --auto --squash; fi
