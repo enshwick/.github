@@ -8,7 +8,7 @@ inputs:
     description: More tools for taiki-e/install-action, comma-separated (cargo-nextest,cargo-deny).
     default: ""
   wine:
-    description: Install Wine to run Windows test executables.
+    description: Set up the Wine of GE-Proton to run Windows test executables.
     default: "false"
   sanitizers:
     description: Install clang's sanitizer headers, for C and C++ that dependencies build under a sanitizer.
@@ -44,29 +44,63 @@ runs:
           } >> "$GITHUB_ENV"
         fi
 
-    # Wine runs Windows test executables. Downloaded packages stay in the
-    # tool cache between jobs.
-    - name: Install Wine
+    # Wine runs Windows test executables: the Wine of GE-Proton, run outside
+    # Steam, downloaded once into the tool cache and checked against its
+    # published SHA-512. A prefix made once beside it is copied for each
+    # job, so no two jobs share a running prefix. Measured against Ubuntu's
+    # Wine on 2026-10-27: the same tests pass, as fast on the organization
+    # runners, and on a hosted runner in 20 s instead of an apt install of
+    # 12 to 32 minutes.
+    - name: Wine from GE-Proton
       if: inputs.wine == 'true'
       shell: bash
-      run: |
-        if ! dpkg -s wine > /dev/null 2>&1 && ! command -v wine > /dev/null; then
-          # Concurrent jobs share the cache, so apt works in a directory of
-          # its own (it locks it) and the packages are copied in and out.
-          shared="${RUNNER_TOOL_CACHE:-$HOME/.cache}/apt-archives"
-          archives="$RUNNER_TEMP/apt"
-          mkdir -p "$shared" "$archives/partial"
-          cp -n "$shared"/*.deb "$archives"/ 2> /dev/null || true
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dir::Cache::archives="$archives" \
-            install -y -qq --no-install-recommends wine wine64
-          cp -n "$archives"/*.deb "$shared"/ 2> /dev/null || true
-        fi
-        # The runner image carries a prefix already.
-        if [ ! -f "${WINEPREFIX:-$HOME/.wine}/system.reg" ]; then
-          WINEDEBUG=-all wineboot -i > /dev/null 2>&1 || true
-        fi
-        echo "WINEDEBUG=-all" >> "$GITHUB_ENV"
+      env:
+        GE_PROTON: GE-Proton11-11
+        GE_PROTON_SHA512: 45721a7b625b2404d8896bb5e2a8b87fc9623a394873a6dd6b900c839681d5c01ec694ca00d003fc9c733c5f6c5648af8171985656f9fa47e20999fbebdbe235
+      run: | # zizmor: ignore[github-env] fixed paths only
+        root="${RUNNER_TOOL_CACHE:-$HOME/.cache}/ge-proton"
+        dir="$root/$GE_PROTON"
+        mkdir -p "$root"
+        # Jobs share the tool cache: one sets up a version at a time.
+        (
+          flock 9
+          if [ ! -x "$dir/files/bin/wine" ]; then
+            archive="$RUNNER_TEMP/ge-proton.tar.gz"
+            curl --proto '=https' --tlsv1.2 -sSfL -o "$archive" \
+              "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/$GE_PROTON/$GE_PROTON-x86_64.tar.gz"
+            echo "$GE_PROTON_SHA512  $archive" | sha512sum -c -
+            rm -rf "$dir.part"
+            mkdir -p "$dir.part"
+            tar -xzf "$archive" -C "$dir.part" --strip-components 1
+            rm -f "$archive"
+            mv "$dir.part" "$dir"
+          fi
+          if [ ! -f "$dir.prefix/system.reg" ]; then
+            rm -rf "$dir.prefix.part"
+            # GE-Proton carries Wine's programs, not its wineboot script;
+            # wineboot returns before wineserver has written the registry.
+            WINEPREFIX="$dir.prefix.part" WINEDEBUG=-all "$dir/files/bin/wine" wineboot -i > /dev/null 2>&1
+            WINEPREFIX="$dir.prefix.part" "$dir/files/bin/wineserver" -w
+            test -f "$dir.prefix.part/system.reg"
+            mv "$dir.prefix.part" "$dir.prefix"
+          fi
+          # Versions this step no longer names go.
+          for old in "$root"/*; do
+            case "${old##*/}" in
+              "$GE_PROTON" | "$GE_PROTON.prefix") ;;
+              *) rm -rf "$old" ;;
+            esac
+          done
+        ) 9> "$root.lock"
+        prefix="$RUNNER_TEMP/wine-prefix"
+        rm -rf "$prefix"
+        cp -a "$dir.prefix" "$prefix"
+        {
+          echo "WINEPREFIX=$prefix"
+          echo "WINEDEBUG=-all"
+        } >> "$GITHUB_ENV"
+        echo "$dir/files/bin" >> "$GITHUB_PATH"
+        "$dir/files/bin/wine" --version
 
     - name: Install the toolchain
       shell: bash
