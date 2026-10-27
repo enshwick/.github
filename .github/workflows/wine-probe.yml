@@ -1,8 +1,9 @@
 name: Wine or Proton probe
 
-# By hand: the platform's Windows tests under Ubuntu's Wine, under the Wine
-# of GE-Proton, or through umu-run with GE-Proton, on the organization
-# runners or a GitHub-hosted runner. The setup and the tests are separate
+# By hand: the Windows tests of the platform's main under Ubuntu's Wine,
+# under the Wine of GE-Proton, or through umu-run with GE-Proton, on the
+# organization runners or a GitHub-hosted runner. Only main: the
+# organization runners share their caches with main's own runs. The setup and the tests are separate
 # steps, so their times can be compared. GE-Proton is downloaded once into
 # the runner's tool cache and checked against its published SHA-512; nothing
 # is installed machine-wide.
@@ -10,10 +11,6 @@ name: Wine or Proton probe
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: The enshwick/enshwick branch, tag or commit to test.
-        type: string
-        default: main
       runner:
         description: Where the tests run.
         type: choice
@@ -46,8 +43,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # main only: these runners share their caches with main's runs.
           repository: enshwick/enshwick
-          ref: ${{ inputs.ref }}
+          ref: main
           persist-credentials: false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
