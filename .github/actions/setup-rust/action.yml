@@ -232,9 +232,11 @@ runs:
       if: inputs.gh == 'true'
       shell: bash
       env:
-        GH_VERSION: 2.103.3
+        GH_TAG: v2.103.3
         GH_SHA256: 4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d
       run: | # zizmor: ignore[github-env] fixed paths only
+        # The pin names the release tag, which Renovate looks releases up by.
+        GH_VERSION="${GH_TAG#v}"
         dir="${RUNNER_TOOL_CACHE:-$HOME/.cache}/gh/$GH_VERSION"
         if [ ! -x "$dir/bin/gh" ]; then
           archive="$RUNNER_TEMP/gh.tar.gz"

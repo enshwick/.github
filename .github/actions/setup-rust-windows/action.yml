@@ -84,16 +84,16 @@ runs:
     - name: cargo-xwin and sccache
       shell: bash
       env:
-        XWIN_VERSION: 0.23.1
+        XWIN_TAG: v0.23.1
         XWIN_SHA256: 114534c57cdcca604f59c9d70024583d20ff7c5505677f06247e971184a23872
-        SCCACHE_VERSION: 0.19.0
+        SCCACHE_TAG: v0.19.0
         SCCACHE_SHA256: 28be8c61f6b2c89b9eb2869f6af7f78e6f992e78a8abae0ce855fcc129cbeac1
         # The version the Linux jobs get: cargo-nextest 0.9.150 (2026-10-26) is not yet in install-action's manifests.
-        NEXTEST_VERSION: 0.9.149
+        NEXTEST_TAG: cargo-nextest-0.9.149
         NEXTEST_SHA256: bf904b85c7c5c2a29c340053a8d9d8e8027ff0d55a2bf7cef7d23032f8166438
-        DENY_VERSION: 0.20.2
+        DENY_TAG: 0.20.2
         DENY_SHA256: 975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc
-        LLVM_VERSION: 23.1.4
+        LLVM_TAG: llvmorg-23.1.4
         LLVM_SHA256: 854bffcfc84528e0ee92490ff5c178920abd358a79c3e98f053e41e3e8e4c6d2
       run: | # zizmor: ignore[github-env] fixed paths only
         cache="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}"
@@ -103,6 +103,12 @@ runs:
           sleep 2
         done
         trap 'rmdir "$lock"' EXIT
+        # The pins name release tags, which Renovate looks releases up by.
+        XWIN_VERSION="${XWIN_TAG#v}"
+        SCCACHE_VERSION="${SCCACHE_TAG#v}"
+        NEXTEST_VERSION="${NEXTEST_TAG#cargo-nextest-}"
+        DENY_VERSION="$DENY_TAG"
+        LLVM_VERSION="${LLVM_TAG#llvmorg-}"
         keep=()
         fetch() { # name version sha256 url
           dir="$cache/tools/$1-$2"
