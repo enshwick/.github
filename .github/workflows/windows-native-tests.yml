@@ -4,10 +4,11 @@ name: Windows native tests
 # the owner's PC (label `enshwick-pc`), with the output shown. For chasing
 # failures that Wine does not show. Only members can start it, and it runs
 # only the organization's own branches, the trust the pull request lane on
-# the same runners already gives them. The PC is the owner's: one job,
-# bounded. With `asan`, the tests run under AddressSanitizer: the pinned
-# nightly instruments them, and the runtime is clang's, from the LLVM the
-# setup already unpacks; no Visual Studio is needed.
+# the same runners already gives them, with the same caches: those of
+# branches, apart from the ones runs of main restore. The PC is the owner's:
+# one job, bounded. With `asan`, the tests run under AddressSanitizer: the
+# pinned nightly instruments them, and the runtime is clang's, from the LLVM
+# the setup already unpacks; no Visual Studio is needed.
 
 on:
   workflow_dispatch:
@@ -82,7 +83,10 @@ jobs:
           path: .enshwick-ci
           persist-credentials: false
 
+      # Any ref: the caches of branches, never the ones main's runs restore.
       - uses: ./.enshwick-ci/.github/actions/setup-rust-windows # zizmor: ignore[self-repository]
+        with:
+          trust: branch
 
       - name: Tests
         env:

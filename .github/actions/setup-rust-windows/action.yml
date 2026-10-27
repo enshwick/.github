@@ -5,14 +5,35 @@ description: >-
   one cache directory the runners share. No Visual Studio, nothing installed
   machine-wide. Git Bash only.
 
+inputs:
+  trust:
+    description: >-
+      main for runs of the default branch itself (pushes, schedules, runs by
+      hand there), branch for everything else (pull requests, the merge
+      queue, any other ref). Each has its own compile cache and cargo home,
+      so code from a branch never fills what a run of main restores.
+    default: branch
+
 runs:
   using: composite
   steps:
     # The runners share one cache; a directory made with mkdir is the lock
     # (Git Bash has no flock), taken over when a killed job left it behind.
+    # The toolchain, the Windows SDK and the tools are written only by these
+    # steps, from checked downloads, and are shared. What a build writes,
+    # sccache's objects and cargo's registry, is kept apart per trust: a
+    # branch's build code runs as the runners' user and could otherwise
+    # leave objects that main's runs take as their own.
     - name: Toolchain in the shared cache
       shell: bash
+      env:
+        TRUST: ${{ inputs.trust }}
       run: | # zizmor: ignore[github-env] fixed paths only
+        case "$TRUST" in
+          main) size=8G ;;
+          branch) size=12G ;;
+          *) echo "::error::trust must be main or branch, not $TRUST"; exit 1 ;;
+        esac
         cache="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}"
         mkdir -p "$cache"
         lock="$cache/.lock"
@@ -21,7 +42,9 @@ runs:
           sleep 2
         done
         trap 'rmdir "$lock"' EXIT
-        export RUSTUP_HOME="$cache/rustup" CARGO_HOME="$cache/cargo"
+        # The single compile cache and cargo home of before the split go.
+        rm -rf "$cache/sccache" "$cache/cargo"
+        export RUSTUP_HOME="$cache/rustup" CARGO_HOME="$cache/$TRUST/cargo"
         if [ ! -x "$CARGO_HOME/bin/rustup.exe" ]; then
           curl --proto '=https' --tlsv1.2 -sSfL -o "$RUNNER_TEMP/rustup-init.exe" \
             https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe
@@ -38,8 +61,9 @@ runs:
           echo "RUSTUP_HOME=$RUSTUP_HOME"
           echo "CARGO_HOME=$CARGO_HOME"
           echo "XWIN_CACHE_DIR=$cache/xwin"
-          echo "SCCACHE_DIR=$cache/sccache"
-          echo "SCCACHE_CACHE_SIZE=20G"
+          echo "SCCACHE_DIR=$cache/$TRUST/sccache"
+          # Together the 20 GB the PC gives the compile cache.
+          echo "SCCACHE_CACHE_SIZE=$size"
           # One sccache server per runner: on the shared default port one
           # job's server going away dropped another job's compiles.
           # A lost connection to the server compiles without the cache
