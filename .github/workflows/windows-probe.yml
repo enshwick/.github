@@ -1,6 +1,7 @@
 name: Windows probe
 
-# What the owner's native Windows runners (label `enshwick-pc`) carry: the
+# What the owner's native Windows runners for branches (label
+# `enshwick-pc-branch`) carry: the
 # shells, git, Rust, the MSVC build tools and the Windows SDK, Bun. Run by
 # hand; it installs nothing machine-wide. These runners share the owner's
 # PC, so every job here is short, bounded and leaves nothing behind.
@@ -13,7 +14,7 @@ permissions: {}
 
 jobs:
   probe:
-    runs-on: [self-hosted, Windows, X64, enshwick-pc]
+    runs-on: [self-hosted, Windows, X64, enshwick-pc-branch]
     timeout-minutes: 10
     permissions: {}
     steps:

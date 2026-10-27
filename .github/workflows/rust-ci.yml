@@ -235,8 +235,13 @@ jobs:
     permissions: {}
     outputs:
       native: ${{ steps.online.outputs.native }}
+      label: ${{ steps.online.outputs.label }}
     env:
       HAS_APP: ${{ secrets.ENSHWICK_CI_CLIENT_ID != '' }}
+      # Runs of main itself go to the PC runners of the account that alone
+      # writes main's caches; everything else to those of the branch
+      # account, which cannot reach them.
+      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
     steps:
       - name: Mint the enshwick-ci token
         id: token
@@ -253,14 +258,16 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
+          label="enshwick-pc-$TRUST"
           count=0
           if [ -n "$GH_TOKEN" ]; then
             count=$(gh api --paginate "orgs/$GITHUB_REPOSITORY_OWNER/actions/runners" --jq \
-              '.runners[] | select(.status == "online") | select([.labels[].name] | index("enshwick-pc")) | .name' |
+              '.runners[] | select(.status == "online") | select([.labels[].name] | index("'"$label"'")) | .name' |
               wc -l) || count=0
           fi
-          echo "PC runners online: $count"
+          echo "PC runners labelled $label online: $count"
           if [ "$count" -gt 0 ]; then echo "native=true"; else echo "native=false"; fi >> "$GITHUB_OUTPUT"
+          echo "label=$label" >> "$GITHUB_OUTPUT"
 
   # The Windows lint (clippy for the msvc target) on the owner's PC while it
   # is online; otherwise the part `windows-lint` runs it with cargo-xwin on
@@ -268,7 +275,7 @@ jobs:
   windows-lint-native:
     needs: [scope, windows-gate]
     if: inputs.split && needs.windows-gate.outputs.native == 'true'
-    runs-on: [self-hosted, Windows, X64, enshwick-pc]
+    runs-on: [self-hosted, Windows, X64, "${{ needs.windows-gate.outputs.label }}"]
     timeout-minutes: 20
     permissions:
       contents: read
@@ -322,7 +329,7 @@ jobs:
   all-native:
     needs: [scope, windows-gate]
     if: ${{ !inputs.split && needs.windows-gate.outputs.native == 'true' }}
-    runs-on: [self-hosted, Windows, X64, enshwick-pc]
+    runs-on: [self-hosted, Windows, X64, "${{ needs.windows-gate.outputs.label }}"]
     timeout-minutes: 20
     permissions:
       contents: read
@@ -382,7 +389,7 @@ jobs:
   windows-native:
     needs: [scope, windows-gate]
     if: inputs.native-tests && needs.windows-gate.outputs.native == 'true'
-    runs-on: [self-hosted, Windows, X64, enshwick-pc]
+    runs-on: [self-hosted, Windows, X64, "${{ needs.windows-gate.outputs.label }}"]
     timeout-minutes: 20
     permissions:
       contents: read

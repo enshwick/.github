@@ -1,11 +1,11 @@
 name: Windows native tests
 
 # By hand: tests of an enshwick repository at any of its refs, natively on
-# the owner's PC (label `enshwick-pc`), with the output shown. For chasing
-# failures that Wine does not show. Only members can start it, and it runs
-# only the organization's own branches, the trust the pull request lane on
-# the same runners already gives them, with the same caches: those of
-# branches, apart from the ones runs of main restore. The PC is the owner's:
+# the owner's PC (label `enshwick-pc-branch`), with the output shown. For
+# chasing failures that Wine does not show. Only members can start it, and
+# it runs only the organization's own branches, the trust the pull request
+# lane on the same runners already gives them: the branch account's runners
+# and caches, which cannot write the ones runs of main restore. The PC is the owner's:
 # one job, bounded. With `asan`, the tests run under AddressSanitizer: the
 # pinned nightly instruments them, and the runtime is clang's, from the LLVM
 # the setup already unpacks; no Visual Studio is needed.
@@ -42,7 +42,8 @@ concurrency:
 
 jobs:
   tests:
-    runs-on: [self-hosted, Windows, X64, enshwick-pc]
+    # The branch account's runners: any ref runs here.
+    runs-on: [self-hosted, Windows, X64, enshwick-pc-branch]
     timeout-minutes: 20
     permissions:
       contents: read
@@ -98,7 +99,7 @@ jobs:
           unset CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER
           toolchain=()
           if [ "$ASAN" = true ]; then
-            lock="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}/.lock"
+            lock="$ENSHWICK_PC_ROOT/.lock"
             until mkdir "$lock" 2> /dev/null; do
               if [ -n "$(find "$lock" -maxdepth 0 -mmin +15 2> /dev/null)" ]; then rmdir "$lock"; fi
               sleep 2

@@ -10,31 +10,35 @@ inputs:
     description: >-
       main for runs of the default branch itself (pushes, schedules, runs by
       hand there), branch for everything else (pull requests, the merge
-      queue, any other ref). Each has its own compile cache and cargo home,
-      so code from a branch never fills what a run of main restores.
+      queue, any other ref). Each has its own cache root, toolchain
+      included, on runners of its own Windows account, so code from a
+      branch never fills what a run of main restores.
     default: branch
 
 runs:
   using: composite
   steps:
-    # The runners share one cache; a directory made with mkdir is the lock
-    # (Git Bash has no flock), taken over when a killed job left it behind.
-    # The toolchain, the Windows SDK and the tools are written only by these
-    # steps, from checked downloads, and are shared. What a build writes,
-    # sccache's objects and cargo's registry, is kept apart per trust: a
-    # branch's build code runs as the runners' user and could otherwise
-    # leave objects that main's runs take as their own.
+    # Each trust has its own cache root, written only by the Windows account
+    # its runners log on as: main's runners keep C:/enshwick-ci, the branch
+    # account's runners C:/enshwick-ci-branch, and neither account can
+    # write the other's. Code from a branch runs as the branch account, so
+    # it cannot leave a toolchain, a tool or a compiled object that a run of
+    # main takes as its own. The runners of one account share its root; a
+    # directory made with mkdir is the lock (Git Bash has no flock), taken
+    # over when a killed job left it behind. The toolchain, the Windows SDK
+    # and the tools are written only by these steps, from checked downloads.
     - name: Toolchain in the shared cache
       shell: bash
       env:
         TRUST: ${{ inputs.trust }}
       run: | # zizmor: ignore[github-env] fixed paths only
         case "$TRUST" in
-          main) size=8G ;;
-          branch) size=12G ;;
+          main) size=8G suffix= ;;
+          branch) size=12G suffix=-branch ;;
           *) echo "::error::trust must be main or branch, not $TRUST"; exit 1 ;;
         esac
-        cache="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}"
+        cache="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}$suffix"
+        echo "ENSHWICK_PC_ROOT=$cache" >> "$GITHUB_ENV"
         mkdir -p "$cache"
         lock="$cache/.lock"
         until mkdir "$lock" 2> /dev/null; do
@@ -96,7 +100,7 @@ runs:
         LLVM_VERSION: 23.1.4
         LLVM_SHA256: 854bffcfc84528e0ee92490ff5c178920abd358a79c3e98f053e41e3e8e4c6d2
       run: | # zizmor: ignore[github-env] fixed paths only
-        cache="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}"
+        cache="$ENSHWICK_PC_ROOT"
         lock="$cache/.lock"
         until mkdir "$lock" 2> /dev/null; do
           if [ -n "$(find "$lock" -maxdepth 0 -mmin +15 2> /dev/null)" ]; then rmdir "$lock"; fi
@@ -158,7 +162,7 @@ runs:
       shell: bash
       run: | # zizmor: ignore[github-env] fixed paths only
         echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
-        lock="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}/.lock"
+        lock="$ENSHWICK_PC_ROOT/.lock"
         until mkdir "$lock" 2> /dev/null; do
           if [ -n "$(find "$lock" -maxdepth 0 -mmin +15 2> /dev/null)" ]; then rmdir "$lock"; fi
           sleep 2
