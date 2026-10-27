@@ -69,6 +69,7 @@ jobs:
           persist-credentials: false
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
         with:
+          # cargo-nextest 0.9.150 (2026-10-26) is not yet in install-action's manifests.
           tools: cargo-nextest@0.9.149,cargo-udeps@0.1.61,cargo-llvm-cov@0.9.1
           # Fuzz and sanitizer builds compile dependencies' C and C++
           # under the sanitizer too.

@@ -86,14 +86,15 @@ runs:
       env:
         XWIN_VERSION: 0.23.1
         XWIN_SHA256: 114534c57cdcca604f59c9d70024583d20ff7c5505677f06247e971184a23872
-        SCCACHE_VERSION: 0.18.0
-        SCCACHE_SHA256: 8965c74d5e8a225244f741e18ad2f3f504f48228dc1bac948fc22761a348363d
+        SCCACHE_VERSION: 0.19.0
+        SCCACHE_SHA256: 28be8c61f6b2c89b9eb2869f6af7f78e6f992e78a8abae0ce855fcc129cbeac1
+        # The version the Linux jobs get: cargo-nextest 0.9.150 (2026-10-26) is not yet in install-action's manifests.
         NEXTEST_VERSION: 0.9.149
         NEXTEST_SHA256: bf904b85c7c5c2a29c340053a8d9d8e8027ff0d55a2bf7cef7d23032f8166438
         DENY_VERSION: 0.20.2
         DENY_SHA256: 975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc
-        LLVM_VERSION: 23.1.3
-        LLVM_SHA256: 9ee6a2192fbb30c776415af529927f76ca6b5d1d55699bb1315f9878e610b5b8
+        LLVM_VERSION: 23.1.4
+        LLVM_SHA256: 854bffcfc84528e0ee92490ff5c178920abd358a79c3e98f053e41e3e8e4c6d2
       run: | # zizmor: ignore[github-env] fixed paths only
         cache="${ENSHWICK_PC_CACHE:-C:/enshwick-ci}"
         lock="$cache/.lock"
@@ -102,8 +103,10 @@ runs:
           sleep 2
         done
         trap 'rmdir "$lock"' EXIT
+        keep=()
         fetch() { # name version sha256 url
           dir="$cache/tools/$1-$2"
+          keep+=("$1-$2")
           if [ ! -d "$dir" ]; then
             archive="$RUNNER_TEMP/$1.${4##*.}"
             curl --proto '=https' --tlsv1.2 -sSfL -o "$archive" "$4"
@@ -139,6 +142,15 @@ runs:
           mv "$llvm.part" "$llvm"
         fi
         echo "$llvm/bin" >> "$GITHUB_PATH"
+        keep+=("llvm-$LLVM_VERSION")
+        # Versions the steps no longer name go, under the lock; one a running
+        # job still holds open stays until a later setup.
+        for old in "$cache"/tools/*; do
+          case " ${keep[*]} " in
+            *" ${old##*/} "*) ;;
+            *) rm -rf "$old" 2> /dev/null || true ;;
+          esac
+        done
 
     # The Windows SDK and CRT: cargo-xwin downloads them once into the
     # shared cache, under the lock.
