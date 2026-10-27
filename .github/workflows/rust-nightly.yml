@@ -2,7 +2,7 @@ name: Rust nightly
 
 # The checks too slow for a pull request, once a night on the organization
 # runners: Miri on the packages a repository names, unused dependencies,
-# coverage, external links, benchmarks and, where a repository asks, its fuzz
+# coverage, external links, benchmarks against the last passing night and, where a repository asks, its fuzz
 # targets, loom models, Kani proofs and tests under AddressSanitizer. Every step runs even after another failed, so one night reports
 # everything. Packages that build only for Windows
 # (`[package.metadata.enshwick] windows-only = true`) stay out: these checks
@@ -39,6 +39,14 @@ on:
         description: cargo nextest run arguments for the tests to run under AddressSanitizer, such as `-p a-crate --lib`; none when empty.
         type: string
         default: ""
+      bench-args:
+        description: Extra cargo bench arguments, such as `--features a-crate/test` for benches that need a feature.
+        type: string
+        default: ""
+      bench-regression:
+        description: Fail when a benchmark got slower than the last passing night by more than this percent, at the low end of criterion's confidence interval; 0 turns the check off.
+        type: number
+        default: 25
 
 permissions: {}
 
@@ -130,13 +138,62 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Criterion compares each run with the one before in target/criterion;
+      # that one is the last night whose benchmarks passed the check.
+      - name: Restore the last passing benchmarks
+        if: ${{ !cancelled() && steps.scope.outputs.benches != '0' && inputs.bench-regression > 0 }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/criterion
+          key: criterion-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: criterion-${{ runner.os }}-
+
       - name: Benchmarks
+        id: benches
         if: ${{ !cancelled() && steps.scope.outputs.benches != '0' }}
         env:
           EXCLUDES: ${{ steps.scope.outputs.excludes }}
+          ARGS: ${{ inputs.bench-args }}
         run: |
+          # Only tonight's comparisons count, not those of a bench since removed.
+          shopt -s globstar nullglob
+          rm -rf target/criterion/**/change
           # shellcheck disable=SC2086 # one word per flag
-          cargo bench --workspace $EXCLUDES
+          cargo bench --workspace $EXCLUDES $ARGS
+
+      - name: Benchmark regressions
+        id: regressions
+        if: ${{ !cancelled() && steps.benches.outcome == 'success' && inputs.bench-regression > 0 }}
+        env:
+          PERCENT: ${{ inputs.bench-regression }}
+        run: |
+          shopt -s globstar nullglob
+          slower=0
+          {
+            echo '## Benchmark changes'
+            echo
+            echo '| Benchmark | Change, low to high |'
+            echo '| --- | --- |'
+          } >> "$GITHUB_STEP_SUMMARY"
+          for change in target/criterion/**/change/estimates.json; do
+            name=${change#target/criterion/}
+            name=${name%/change/estimates.json}
+            read -r low high < <(jq -r '.mean.confidence_interval
+              | "\(.lower_bound * 100 | round) \(.upper_bound * 100 | round)"' "$change")
+            echo "| $name | ${low}% to ${high}% |" >> "$GITHUB_STEP_SUMMARY"
+            if (( low > PERCENT )); then
+              echo "::error::$name is ${low}% to ${high}% slower than the last passing night"
+              slower=1
+            fi
+          done
+          exit "$slower"
+
+      - name: Keep these benchmarks for the next night
+        if: ${{ !cancelled() && steps.regressions.outcome == 'success' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/criterion
+          key: criterion-${{ runner.os }}-${{ github.run_id }}
 
       # Release builds: a model run in debug takes many times as long.
       - name: Loom models
