@@ -217,7 +217,7 @@ runs:
     # a version it lacks falls back to cargo-binstall, which fails in the
     # per-job tools directory.
     - if: steps.tools.outputs.missing != ''
-      uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+      uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.88.0
       with:
         tool: ${{ steps.tools.outputs.missing }}
 
