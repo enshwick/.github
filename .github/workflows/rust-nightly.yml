@@ -180,17 +180,26 @@ jobs:
             echo "benches=$benches"
           } >> "$GITHUB_OUTPUT"
 
+      # Hosted machines of one label run on several processor models, whose
+      # timings differ by more than the regression threshold.
+      - name: The processor model
+        id: machine
+        if: steps.scope.outputs.benches != '0' && inputs.bench-regression > 0
+        run: |
+          model=$(sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo | head -n 1)
+          echo "kind=$(printf '%s' "$model" | tr -cs '[:alnum:]' '-')" >> "$GITHUB_OUTPUT"
+
       # Criterion compares each run with the one before in target/criterion;
-      # that one is the last night whose benchmarks passed the check. The
-      # key names the machine kind: a baseline from other hardware compares
+      # that one is the last night whose benchmarks passed the check on the
+      # same processor model: a baseline from other hardware compares
       # nothing.
       - name: Restore the last passing benchmarks
         if: steps.scope.outputs.benches != '0' && inputs.bench-regression > 0
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/criterion
-          key: criterion-hosted-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: criterion-hosted-${{ runner.os }}-
+          key: criterion-hosted-${{ runner.os }}-${{ steps.machine.outputs.kind }}-${{ github.run_id }}
+          restore-keys: criterion-hosted-${{ runner.os }}-${{ steps.machine.outputs.kind }}-
 
       - name: Benchmarks
         id: benches
@@ -237,7 +246,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/criterion
-          key: criterion-hosted-${{ runner.os }}-${{ github.run_id }}
+          key: criterion-hosted-${{ runner.os }}-${{ steps.machine.outputs.kind }}-${{ github.run_id }}
 
   loom-kani:
     name: loom and Kani
