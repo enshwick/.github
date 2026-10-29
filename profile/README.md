@@ -2,4 +2,4 @@
   <img src="banner.png" alt="enshwick" width="100%">
 </p>
 
-A mod loader and modding API for Enshrouded, and the mods built on it.
+A Rust modding API for Enshrouded with the mod loader built in, and the mods built on it.
