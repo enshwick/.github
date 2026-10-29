@@ -1,0 +1,40 @@
+name: Renovate start
+
+# Starts a Renovate run now instead of at its next scheduled run. The
+# platform calls it when a push to its main changes the ABI layout: the new
+# dev loader refuses mods built for the old layout, so every mod's pinned
+# platform commit has to move now, not within four hours. Renovate runs one
+# at a time; a start while it runs waits for it.
+
+on:
+  workflow_call:
+    secrets:
+      ENSHWICK_CI_CLIENT_ID:
+        description: The enshwick-ci app, which may start workflows on enshwick/.github.
+        required: true
+      ENSHWICK_CI_PRIVATE_KEY:
+        description: The enshwick-ci app's private key.
+        required: true
+
+permissions: {}
+
+jobs:
+  start:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Token for enshwick/.github
+        id: token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.ENSHWICK_CI_CLIENT_ID }}
+          private-key: ${{ secrets.ENSHWICK_CI_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: .github
+          permission-actions: write
+
+      - name: Start Renovate
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: gh workflow run renovate.yml --repo "$GITHUB_REPOSITORY_OWNER/.github" --ref main
