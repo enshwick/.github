@@ -119,8 +119,8 @@ jobs:
   server-pin:
     needs: watch
     # A build without a table, or, to keep the executable of the current
-    # tabled build (say a person wrote its table), a run by hand or the
-    # tick in the 03:00 UTC hour (a no-op once the file is kept).
+    # tabled build (say a person wrote its table) and run the game binary
+    # tests on it, a run by hand or the tick in the 03:00 UTC hour.
     if: >-
       inputs.pin && needs.watch.outputs.server-build != ''
       && (needs.watch.outputs.server-has-table != 'true' || needs.watch.outputs.seed == 'true' || inputs.rehearse)
@@ -194,6 +194,19 @@ jobs:
       - if: env.HAS_TABLE != 'true' && steps.exe.outputs.old == ''
         run: echo "::warning::no earlier server executable is kept; the issue stays for a person"
 
+      # The kept build has a table: the tests that read a game executable
+      # (its table's patterns, reflection, the catalogue, the pin path)
+      # check it, and a failure fails the run.
+      - if: env.HAS_TABLE == 'true'
+        uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
+
+      - name: Game binary tests
+        if: env.HAS_TABLE == 'true'
+        run: |
+          exe="$GAME/$BUILD/enshrouded_server.exe"
+          ENSH_SERVER_EXE="$exe" ENSHWICK_PIN_EXE="$exe" \
+            cargo test --release -q -p enshwick-gamedata -p cargo-enshwick -- --include-ignored
+
       # Wine runs the compat report, which needs the loader's Windows build.
       - if: env.HAS_TABLE != 'true' && steps.exe.outputs.old != ''
         uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
@@ -243,6 +256,27 @@ jobs:
           esac
           echo "works=$works" >> "$GITHUB_OUTPUT"
 
+      # The tests that read a game executable, on the new one with the
+      # table just written. A failure keeps the pull request for a person.
+      - name: Game binary tests
+        id: tests
+        if: steps.pin.outcome == 'success'
+        run: |
+          exe="$GAME/$BUILD/enshrouded_server.exe"
+          status=0
+          ENSH_SERVER_EXE="$exe" ENSHWICK_PIN_EXE="$exe" \
+            cargo test --release -q -p enshwick-gamedata -p cargo-enshwick -- --include-ignored \
+            > "$RUNNER_TEMP/tests.log" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/tests.log"
+          {
+            echo '```text'
+            grep -E '^(test result|failures:|    [a-z_:]+$|thread .* panicked)' "$RUNNER_TEMP/tests.log" | tail -n 40
+            echo '```'
+          } > "$RUNNER_TEMP/tests.md"
+          passed=false
+          [ "$status" != 0 ] || passed=true
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
+
       - name: Mint the enshwick-ci token
         id: token
         if: steps.pin.outcome == 'success' && env.REHEARSE != 'true'
@@ -262,6 +296,7 @@ jobs:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           COMPLETE: ${{ steps.pin.outputs.complete }}
           WORKS: ${{ steps.compat.outputs.works }}
+          TESTS: ${{ steps.tests.outputs.passed }}
           OLD: ${{ steps.exe.outputs.old }}
         run: |
           branch="game/server-$BUILD"
@@ -277,7 +312,7 @@ jobs:
               --json number --jq '.[0].number // empty')
           fi
           automerge=false
-          if [ "$COMPLETE" = true ] && [ "$WORKS" = true ]; then automerge=true; fi
+          if [ "$COMPLETE" = true ] && [ "$WORKS" = true ] && [ "$TESTS" = true ]; then automerge=true; fi
           {
             echo "## Features"
             echo
@@ -290,6 +325,9 @@ jobs:
               false) echo "- Some loader features stay off on this build (compat report below); this waits for a review." ;;
               *) echo "- The compat report could not be made; this waits for a review." ;;
             esac
+            if [ "$TESTS" != true ]; then
+              echo "- The game binary tests fail on this build (tests below); this waits for a review."
+            fi
             if [ "$automerge" = true ]; then
               echo "- Merges on its own once CI passes."
             fi
@@ -304,6 +342,12 @@ jobs:
             echo "<details><summary>compat report</summary>"
             echo
             cat "$RUNNER_TEMP/compat.md"
+            echo
+            echo "</details>"
+            echo
+            echo "<details><summary>game binary tests</summary>"
+            echo
+            cat "$RUNNER_TEMP/tests.md"
             echo
             echo "</details>"
           } > "$RUNNER_TEMP/body.md"
