@@ -465,12 +465,14 @@ jobs:
 
   # The Windows tests under Wine on the organization runners: while the
   # owner's PC is offline, or for callers without `native-tests` outside
-  # pull requests.
+  # pull requests. Never for a pull request from a fork: its code does not
+  # reach these runners, and a maintainer runs the tests from a branch.
   windows-wine:
     needs: [scope, windows-gate, windows-native]
     if: >-
       always() && inputs.split && needs.scope.outputs.skip == ''
       && (github.event_name != 'pull_request' || inputs.native-tests)
+      && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
       && (needs.windows-gate.outputs.native != 'true' || !inputs.native-tests)
     runs-on: enshwick
     timeout-minutes: 45
