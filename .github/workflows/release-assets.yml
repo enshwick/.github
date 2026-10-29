@@ -1,7 +1,7 @@
 name: Release assets
 
-# The files a release carries, built on the organization runners from the
-# release's tag: the archives of `cargo xtask dist` (a mod) or `cargo xtask
+# The files a release carries, built on a fresh GitHub-hosted runner from
+# the release's tag: the archives of `cargo xtask dist` (a mod) or `cargo xtask
 # bundle` (the platform), the PDB and CycloneDX SBOM of every DLL, a
 # SHA256SUMS file, and a build provenance attestation of each, which players
 # check with `gh attestation verify <file> --owner enshwick`. The caller runs
@@ -32,7 +32,10 @@ permissions: {}
 
 jobs:
   assets:
-    runs-on: enshwick
+    # A fresh GitHub-hosted machine: what ships is built and published
+    # without the organization runners' shared tool cache and sccache,
+    # which branch builds write to.
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
       contents: write
