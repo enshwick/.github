@@ -16,7 +16,10 @@ if [ -f "$repo/.copier-answers.yml" ]; then
   list=$(git -C "$template" show "$commit:shared-files.txt" 2> /dev/null ||
     git -C "$template" show "HEAD:shared-files.txt")
   mapfile -t shared < <(grep -v -e '^#' -e '^$' <<< "$list")
+  newest=$(git -C "$template" show "HEAD:shared-files.txt")
   for file in "${shared[@]}"; do
+    # A file the newest template no longer shares is the repository's own.
+    grep -qxF "$file" <<< "$newest" || continue
     # A file the pinned template does not have yet is not drift.
     git -C "$template" cat-file -e "$commit:template/$file" 2> /dev/null || continue
     if [ ! -f "$repo/$file" ]; then
