@@ -17,6 +17,29 @@ inputs:
 runs:
   using: composite
   steps:
+    # The runners reuse work trees. A file left with CRLF by an earlier
+    # checkout survives a forced checkout while its stat data matches the
+    # index, and rustfmt then rejects it. Such files are written again from
+    # git; a file whose attributes ask for CRLF stays.
+    - name: Line endings as in git
+      if: runner.environment == 'self-hosted'
+      shell: bash
+      run: |
+        stale=()
+        while IFS= read -r -d '' entry; do
+          case $entry in
+            'i/lf '*' w/crlf '* | 'i/lf '*' w/mixed '*)
+              info=${entry%%$'\t'*}
+              if [[ ${info#*attr/} != *crlf* ]]; then stale+=("${entry#*$'\t'}"); fi
+              ;;
+          esac
+        done < <(git ls-files --eol -z)
+        if [ ${#stale[@]} -gt 0 ]; then
+          echo "Rewriting ${#stale[@]} files left with CRLF by an earlier checkout"
+          printf '%s\0' "${stale[@]}" | xargs -0 rm -f --
+          printf '%s\0' "${stale[@]}" | git checkout-index -u -z --stdin
+        fi
+
     # The runners share one cache; a directory made with mkdir is the lock
     # (Git Bash has no flock), taken over when a killed job left it behind.
     # The toolchain, the Windows SDK and the tools are written only by these
