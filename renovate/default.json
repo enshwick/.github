@@ -62,6 +62,27 @@
       "rangeStrategy": "bump"
     },
     {
+      "description": "Our mods build on the platform's main branch from git, pinned to a commit. Each Renovate run moves the commit to the newest on main, every platform crate of a repository in one pull request that merges once its checks pass.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchDatasources": [
+        "git-refs"
+      ],
+      "matchPackageNames": [
+        "https://github.com/enshwick/enshwick"
+      ],
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "schedule": [
+        "at any time"
+      ],
+      "minimumReleaseAge": null,
+      "groupName": "enshwick main",
+      "automerge": true
+    },
+    {
       "description": "Its last release is from January 2024; the dashboard flags it once a year passes without one.",
       "matchPackageNames": [
         "iced-x86"
