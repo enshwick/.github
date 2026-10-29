@@ -274,6 +274,32 @@
     },
     {
       "customType": "regex",
+      "description": "rhysd/actionlint in the lint workflow: release tag and the SHA-256 of its download, updated together.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/lint\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "ACTIONLINT_TAG: (?<currentValue>v\\d+\\.\\d+\\.\\d+)\\s+ACTIONLINT_SHA256: (?<currentDigest>[a-f0-9]{64})"
+      ],
+      "depNameTemplate": "rhysd/actionlint",
+      "datasourceTemplate": "github-release-attachments",
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "zizmor installed through install-action in the lint workflow.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/lint\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "tool: zizmor@(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "zizmorcore/zizmor",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
       "description": "mozilla/sccache in the composite actions: the release tag only, since its checksum files hold no file name and Renovate would hash the checksum file instead of the download.",
       "managerFilePatterns": [
         "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"

@@ -19,7 +19,7 @@ jobs:
     steps:
       # cmd first: it is there on every Windows, bash may not be.
       - name: Shells and git
-        shell: cmd
+        shell: cmd # zizmor: ignore[misfeature] cmd is what this step probes
         run: |
           ver
           where bash 2>nul || echo bash: none
