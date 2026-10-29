@@ -21,7 +21,10 @@ permissions: {}
 
 jobs:
   build:
-    runs-on: enshwick
+    # A fresh GitHub-hosted machine: what ships is built and published
+    # without the organization runners' shared tool cache and sccache,
+    # which branch builds write to.
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       contents: write

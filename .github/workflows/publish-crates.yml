@@ -3,6 +3,12 @@ name: Publish crates
 # Publishes the caller's crates to crates.io, in the order given, each only
 # when crates.io does not have its version yet, so a run that stopped half
 # way is run again as it is.
+#
+# crates.io trusted publishing gives the job a short-lived token for the
+# caller's workflow file, which crates.io must list as a trusted publisher
+# of every crate. Until then the caller passes CRATES_IO_TOKEN; once the
+# secret is gone, the run publishes through trusted publishing alone. The
+# caller grants `id-token: write`.
 
 on:
   workflow_call:
@@ -13,16 +19,24 @@ on:
         type: string
     secrets:
       CRATES_IO_TOKEN:
-        required: true
+        description: A crates.io token, only until crates.io trusts the caller's workflow.
+        required: false
 
 permissions: {}
 
 jobs:
   publish:
-    runs-on: enshwick
+    # A fresh GitHub-hosted machine: what ships is built and published
+    # without the organization runners' shared tool cache and sccache,
+    # which branch builds write to.
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     permissions:
       contents: read
+      # crates.io trusted publishing.
+      id-token: write
+    env:
+      HAS_TOKEN: ${{ secrets.CRATES_IO_TOKEN != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,9 +51,14 @@ jobs:
           persist-credentials: false
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
 
+      - name: Trusted publishing
+        id: auth
+        if: env.HAS_TOKEN != 'true'
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+
       - name: Publish
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN || steps.auth.outputs.token }}
           PACKAGES: ${{ inputs.packages }}
         run: |
           # The sparse index path of a crate name: 1/, 2/, 3/<first>/ or

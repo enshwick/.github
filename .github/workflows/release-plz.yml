@@ -1,7 +1,7 @@
 name: release-plz
 
 # Versions, changelogs and releases from conventional commits, run by hand on
-# the organization runners. `release-pr` opens or updates the release pull
+# a GitHub-hosted runner. `release-pr` opens or updates the release pull
 # request and then starts the caller's CI on its branch: a pull request opened
 # with GITHUB_TOKEN starts no workflow, but a dispatch does, and the checks
 # attach to the branch's commit. `release` tags each released package, makes
@@ -38,7 +38,10 @@ permissions: {}
 jobs:
   release-plz:
     if: inputs.command == 'release-pr' || inputs.command == 'release'
-    runs-on: enshwick
+    # A fresh GitHub-hosted machine: what ships is built and published
+    # without the organization runners' shared tool cache and sccache,
+    # which branch builds write to.
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       # Push the release branch and tags, make releases.
