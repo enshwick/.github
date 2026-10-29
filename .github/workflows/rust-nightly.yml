@@ -58,7 +58,7 @@ jobs:
     permissions:
       contents: read
     env:
-      NIGHTLY: nightly-2026-10-28
+      NIGHTLY: nightly-2026-10-29
       # Built from source: install-action has no prebuilt cargo-fuzz.
       CARGO_FUZZ: 0.13.2
       # Built from source too; `cargo kani setup` fetches its own toolchain.
