@@ -461,9 +461,10 @@ jobs:
           args: --no-progress --exclude-path target --exclude-path node_modules './**/*.md'
           failIfEmpty: false
 
-  # One result for the night under one name: callers' gates look for
-  # `nightly / nightly`. A part skipped because a repository does not ask
-  # for it counts as passed.
+  # One result for the night under one name. GitHub lists this job only
+  # once every part has finished, so callers' gates look for any
+  # `nightly / ` job to see a lane that still runs. A part skipped because a
+  # repository does not ask for it counts as passed.
   nightly:
     needs: [miri, udeps-coverage, benchmarks, loom-kani, asan, fuzz, links]
     if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
