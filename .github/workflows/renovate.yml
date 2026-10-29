@@ -33,7 +33,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # The newest LTS: Node 26 is current, not yet long-term supported.
-          node-version: 24.22.2
+          node-version: 26.13.0
 
       # Lock files are rewritten with the tools that own them. Bun is
       # downloaded each run: this job holds a token that writes to every
