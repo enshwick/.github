@@ -195,17 +195,23 @@ jobs:
         run: echo "::warning::no earlier server executable is kept; the issue stays for a person"
 
       # The kept build has a table: the tests that read a game executable
-      # (its table's patterns, reflection, the catalogue, the pin path)
-      # check it, and a failure fails the run.
+      # (its table's patterns, reflection, the catalogue, the pin path, and
+      # the loader's sites under Wine) check it, and a failure fails the run.
       - if: env.HAS_TABLE == 'true'
         uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
+        with:
+          wine: true
 
       - name: Game binary tests
         if: env.HAS_TABLE == 'true'
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER: wine
         run: |
           exe="$GAME/$BUILD/enshrouded_server.exe"
           ENSH_SERVER_EXE="$exe" ENSHWICK_PIN_EXE="$exe" \
             cargo test --release -q -p enshwick-gamedata -p cargo-enshwick -- --include-ignored
+          ENSH_SERVER_EXE="Z:$exe" cargo xwin test --release -q --target x86_64-pc-windows-msvc \
+            -p enshwick-loader --features enshwick/test --lib -- --test-threads 1
 
       # Wine runs the compat report, which needs the loader's Windows build.
       - if: env.HAS_TABLE != 'true' && steps.exe.outputs.old != ''
@@ -257,16 +263,22 @@ jobs:
           echo "works=$works" >> "$GITHUB_OUTPUT"
 
       # The tests that read a game executable, on the new one with the
-      # table just written. A failure keeps the pull request for a person.
+      # table just written, the loader's under Wine. A failure keeps the
+      # pull request for a person.
       - name: Game binary tests
         id: tests
         if: steps.pin.outcome == 'success'
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER: wine
         run: |
           exe="$GAME/$BUILD/enshrouded_server.exe"
           status=0
           ENSH_SERVER_EXE="$exe" ENSHWICK_PIN_EXE="$exe" \
             cargo test --release -q -p enshwick-gamedata -p cargo-enshwick -- --include-ignored \
             > "$RUNNER_TEMP/tests.log" 2>&1 || status=$?
+          ENSH_SERVER_EXE="Z:$exe" cargo xwin test --release -q --target x86_64-pc-windows-msvc \
+            -p enshwick-loader --features enshwick/test --lib -- --test-threads 1 \
+            >> "$RUNNER_TEMP/tests.log" 2>&1 || status=$?
           cat "$RUNNER_TEMP/tests.log"
           {
             echo '```text'
