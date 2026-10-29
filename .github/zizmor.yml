@@ -1,0 +1,6 @@
+rules:
+  # Crates publish with the CRATES_IO_TOKEN secret until crates.io has a
+  # trusted publisher for the calling workflow.
+  use-trusted-publishing:
+    ignore:
+      - publish-crates.yml
