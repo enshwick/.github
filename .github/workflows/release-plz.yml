@@ -21,13 +21,6 @@ on:
         description: The caller's workflow file that release-pr starts on the release branch.
         type: string
         default: ci.yml
-    secrets:
-      ENSHWICK_CI_CLIENT_ID:
-        description: The enshwick-ci app, which starts Renovate after a release.
-        required: false
-      ENSHWICK_CI_PRIVATE_KEY:
-        description: The enshwick-ci app's private key.
-        required: false
     outputs:
       releases:
         description: release-plz's `releases` output, a JSON array of package_name, version and tag.
@@ -94,22 +87,3 @@ jobs:
         run: |
           branch=$(jq -r .head_branch <<< "$PR")
           gh workflow run "$CI" --repo "$GITHUB_REPOSITORY" --ref "$branch"
-
-      # A released crate reaches the repositories that depend on it through
-      # Renovate; starting it now saves waiting for its schedule.
-      - name: Mint the enshwick-ci token
-        id: token
-        if: inputs.command == 'release' && steps.release-plz.outputs.releases_created == 'true'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ secrets.ENSHWICK_CI_CLIENT_ID }}
-          private-key: ${{ secrets.ENSHWICK_CI_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: .github
-          permission-actions: write
-
-      - name: Start Renovate
-        if: steps.token.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
-        run: gh workflow run renovate.yml --repo "$GITHUB_REPOSITORY_OWNER/.github" --ref main
