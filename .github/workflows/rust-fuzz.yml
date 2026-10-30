@@ -24,7 +24,7 @@ jobs:
     permissions:
       contents: read
     env:
-      NIGHTLY: nightly-2026-10-29
+      NIGHTLY: nightly-2026-10-30
       # Built from source: install-action has no prebuilt cargo-fuzz.
       CARGO_FUZZ: 0.13.2
     steps:

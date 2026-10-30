@@ -54,7 +54,7 @@ on:
 permissions: {}
 
 env:
-  NIGHTLY: nightly-2026-10-29
+  NIGHTLY: nightly-2026-10-30
 
 jobs:
   miri:
