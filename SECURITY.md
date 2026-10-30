@@ -1,8 +1,9 @@
 # Security
 
 enshwick loads code into the game and the dedicated server, so a flaw in it
-can reach players' machines and servers. Report one privately: open the
-repository's **Security** tab and choose **Report a vulnerability**. Please do
+can reach players' machines and servers. Report one privately in the
+repository's **Security** tab with **Report a vulnerability**. Mail to
+[security@enshwick.com](mailto:security@enshwick.com) works too. Please do
 not open a public issue for it.
 
 A report helps most when it says what is affected (loader, a mod, the
