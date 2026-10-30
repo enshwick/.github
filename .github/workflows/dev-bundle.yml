@@ -40,6 +40,17 @@ jobs:
           ref: main
           path: .enshwick-ci
           persist-credentials: false
+
+      # The Windows SDK and CRT that cargo-xwin downloads, 7 to 9 minutes
+      # from Microsoft on a hosted runner. Microsoft's files only, no build
+      # output, under a key of their own that only a release build of main
+      # saves: a run on main restores no cache a branch wrote.
+      - name: Restore the Windows SDK
+        id: xwin
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/xwin
+          key: xwin-release-${{ runner.os }}-0.23.1-v1
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
         with:
           gh: true
@@ -52,6 +63,13 @@ jobs:
           task: bundle
           out: ${{ runner.temp }}/dev
           token: ${{ github.token }}
+
+      - name: Save the Windows SDK
+        if: github.ref == 'refs/heads/main' && steps.xwin.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/xwin
+          key: xwin-release-${{ runner.os }}-0.23.1-v1
 
       - name: Build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
