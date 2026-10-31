@@ -1,10 +1,9 @@
 name: Rust CI
 
-# `cargo xtask check` for a pull request, a merge queue entry or the nightly
-# run; a push to main checks nothing its pull request did not. Pull requests
-# and the nightly run use GitHub-hosted runners, with the toolchain, the
-# Windows SDK and the build cached between runs; the nightly run fills the
-# caches pull requests start from. With `split` the check runs as parallel jobs: the
+# `cargo xtask check` for a pull request, a merge queue entry or a push to
+# main. Pull requests use GitHub-hosted runners, with the toolchain, the
+# Windows SDK and the build cached between runs; a push to main runs the full
+# suite and fills the caches pull requests start from. With `split` the check runs as parallel jobs: the
 # host check and the Windows lint on hosted runners, and the Windows tests
 # natively on the owner's PC when it is online or else under Wine on the
 # organization runners outside pull requests. The job `check` sums them up
@@ -75,10 +74,9 @@ jobs:
           git clone -q https://github.com/enshwick/template-mod "$RUNNER_TEMP/template-mod"
           .enshwick-ci/scripts/config-drift.sh . "$RUNNER_TEMP/template-mod"
 
-      # Work already proven is not repeated: a push to main carries only
-      # commits whose pull request passed this check, a merge queue group
-      # whose tree is its pull request's own head passed that pull
-      # request's check, and a change to files that never build (documents outside the book,
+      # Work already proven is not repeated: a merge queue group whose tree
+      # is its pull request's own head passed that pull request's check, and
+      # a change to files that never build (documents outside the book,
       # repository settings, workflows) has nothing to compile or test.
       - name: What is left to prove
         id: scope
@@ -93,10 +91,7 @@ jobs:
         run: |
           git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
           reason=""
-          if [ "$EVENT" = push ]; then
-            reason="each commit on main passed its pull request's check; the full suite runs nightly"
-          fi
-          if [ -z "$reason" ] && [ "$EVENT" = merge_group ]; then
+          if [ "$EVENT" = merge_group ]; then
             number=$(sed -nE 's|.*/pr-([0-9]+)-[0-9a-f]+$|\1|p' <<< "$HEAD_REF")
             if [ -n "$number" ]; then
               head=$(curl --proto '=https' -sSf -H "Authorization: Bearer $GH_TOKEN" \
@@ -283,7 +278,7 @@ jobs:
         shell: bash
     env:
       # Only the default branch's own runs fill the caches its runs restore.
-      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
+      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
       # Git settings for this job only: the ten runners share one user
       # profile, and writing its global config at once fails on the lock.
       # Long paths for the work tree; no CRLF, which rustfmt rejects.
@@ -337,7 +332,7 @@ jobs:
         shell: bash
     env:
       # Only the default branch's own runs fill the caches its runs restore.
-      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
+      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
       # Git settings for this job only: the ten runners share one user
       # profile, and writing its global config at once fails on the lock.
       # Long paths for the work tree; no CRLF, which rustfmt rejects.
@@ -397,7 +392,7 @@ jobs:
         shell: bash
     env:
       # Only the default branch's own runs fill the caches its runs restore.
-      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
+      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
       # Git settings for this job only: the ten runners share one user
       # profile, and writing its global config at once fails on the lock.
       # Long paths for the work tree; no CRLF, which rustfmt rejects.
