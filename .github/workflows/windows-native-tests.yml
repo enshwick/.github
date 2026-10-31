@@ -59,7 +59,7 @@ jobs:
       GIT_CONFIG_KEY_1: core.autocrlf
       GIT_CONFIG_VALUE_1: "false"
       CARGO_BUILD_JOBS: "3"
-      NIGHTLY: nightly-2026-10-30
+      NIGHTLY: nightly-2026-10-31
     steps:
       - name: Only the organization's repositories
         env:
