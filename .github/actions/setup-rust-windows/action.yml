@@ -112,8 +112,8 @@ runs:
         SCCACHE_TAG: v0.19.0
         SCCACHE_SHA256: 28be8c61f6b2c89b9eb2869f6af7f78e6f992e78a8abae0ce855fcc129cbeac1
         # The version the Linux jobs get: cargo-nextest 0.9.150 (2026-10-26) is not yet in install-action's manifests.
-        NEXTEST_TAG: cargo-nextest-0.9.149
-        NEXTEST_SHA256: bf904b85c7c5c2a29c340053a8d9d8e8027ff0d55a2bf7cef7d23032f8166438
+        NEXTEST_TAG: cargo-nextest-0.9.150
+        NEXTEST_SHA256: 6fd8f9ba48c946a79a5bcdd35bf4f922447b149f7ca6c3ff7f39e12f32ef78db
         DENY_TAG: 0.20.2
         DENY_SHA256: 975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc
         LLVM_TAG: llvmorg-23.1.4
