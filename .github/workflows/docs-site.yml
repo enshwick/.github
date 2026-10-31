@@ -2,10 +2,8 @@ name: Docs site
 
 # The documentation site of enshwick/docs: checks and builds it, and puts the
 # build on the Cloudflare Worker that the caller's `wrangler.jsonc` names.
-# With `deploy` the build goes live; on a pull request from the same
-# repository it is uploaded as a preview version, whose address lands in the
-# job summary. Both need the two Cloudflare secrets from the caller; without
-# them, as on a pull request from a fork, the build is only checked. The
+# With `deploy` and the two Cloudflare secrets from the caller the build goes
+# live; otherwise, as on a pull request, the build is only checked. The
 # build collects pages from other public repositories (the platform's book at
 # each version's ref), so a deploy also runs when those change, by hand or
 # through docs-rebuild.
@@ -18,7 +16,7 @@ on:
   workflow_call:
     inputs:
       deploy:
-        description: Deploy the build to production; off checks, builds and uploads a pull request preview.
+        description: Deploy the build to production; off only checks and builds it.
         type: boolean
         default: false
     secrets:
@@ -36,7 +34,6 @@ env:
 
 jobs:
   build:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
@@ -76,36 +73,3 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bunx "wrangler@$WRANGLER_VERSION" deploy
-
-      # The Worker is created by the first production deploy; until then a
-      # preview has nothing to attach to, and the summary says so.
-      - name: Preview
-        if: github.event_name == 'pull_request' && env.CLOUDFLARE == 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PULL_REQUEST: ${{ github.event.pull_request.number }}
-          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.ndjson
-        run: |
-          worker=$(bun -e 'console.log(Bun.JSONC.parse(await Bun.file("wrangler.jsonc").text()).name)')
-          status=$(curl -sS -o /dev/null -w '%{http_code}' \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/settings")
-          case "$status" in
-            200) ;;
-            404)
-              echo "No preview: the Worker \`$worker\` does not exist until the first production deploy." >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-              ;;
-            *)
-              echo "::error::Cloudflare answered $status for the Worker $worker"
-              exit 1
-              ;;
-          esac
-          bunx "wrangler@$WRANGLER_VERSION" versions upload --preview-alias "pr-$PULL_REQUEST" --message "Pull request #$PULL_REQUEST"
-          url=$(jq -r 'select(.type == "version-upload") | .preview_alias_url // .preview_url // empty' "$WRANGLER_OUTPUT_FILE_PATH")
-          if [ -z "$url" ]; then
-            echo "::error::wrangler printed no preview address"
-            exit 1
-          fi
-          echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
