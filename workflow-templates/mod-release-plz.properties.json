@@ -1,7 +1,0 @@
-{
-  "name": "enshwick mod release-plz",
-  "description": "Opens the mod's release pull request and tags the release, by hand.",
-  "iconName": "octicon tag",
-  "categories": ["Rust"],
-  "filePatterns": ["^release-plz\\.toml$"]
-}
