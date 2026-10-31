@@ -6,6 +6,9 @@
     ":semanticCommits"
   ],
   "timezone": "Europe/Kyiv",
+  "dependencyDashboard": false,
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 0,
   "platformCommit": "enabled",
   "lockFileMaintenance": {
     "enabled": true,
@@ -81,13 +84,6 @@
       "minimumReleaseAge": null,
       "groupName": "enshwick main",
       "automerge": true
-    },
-    {
-      "description": "Its last release is from January 2024; the dashboard flags it once a year passes without one.",
-      "matchPackageNames": [
-        "iced-x86"
-      ],
-      "abandonmentThreshold": "1 year"
     },
     {
       "description": "The toolchain and rust-version move together and bring new lints, so a person merges them.",
