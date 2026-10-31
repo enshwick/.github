@@ -104,20 +104,6 @@
       "minimumReleaseAge": "3 days"
     },
     {
-      "description": "The dedicated server's pins in image.toml wait three days. A new GE-Proton also needs its sha512 written by hand, so it never merges on its own.",
-      "matchFileNames": [
-        "**/image.toml",
-        "image.toml"
-      ],
-      "minimumReleaseAge": "3 days"
-    },
-    {
-      "matchDepNames": [
-        "GloriousEggroll/proton-ge-custom"
-      ],
-      "automerge": false
-    },
-    {
       "description": "The GitHub CLI, pinned with a checksum in setup-rust, waits three days, as the cargo tools do.",
       "matchManagers": [
         "custom.regex"
@@ -208,32 +194,6 @@
       "depNameTemplate": "rust-nightly",
       "datasourceTemplate": "custom.rust-nightly",
       "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
-    },
-    {
-      "customType": "regex",
-      "description": "The base image of the dedicated server, by tag and digest, in image.toml.",
-      "managerFilePatterns": [
-        "/(^|/)image\\.toml$/"
-      ],
-      "matchStrings": [
-        "base = \"(?<depName>[^:\"]+):(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""
-      ],
-      "datasourceTemplate": "docker",
-      "autoReplaceStringTemplate": "base = \"{{depName}}:{{newValue}}@{{newDigest}}\""
-    },
-    {
-      "customType": "regex",
-      "description": "The GE-Proton build of the dedicated server image, version and download, in image.toml.",
-      "managerFilePatterns": [
-        "/(^|/)image\\.toml$/"
-      ],
-      "matchStrings": [
-        "version = \"(?<currentValue>GE-Proton\\d+-\\d+)\"\\nurl = \"[^\"]*\""
-      ],
-      "depNameTemplate": "GloriousEggroll/proton-ge-custom",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "regex:^GE-Proton(?<major>\\d+)-(?<minor>\\d+)$",
-      "autoReplaceStringTemplate": "version = \"{{newValue}}\"\nurl = \"https://github.com/GloriousEggroll/proton-ge-custom/releases/download/{{newValue}}/{{newValue}}-x86_64.tar.gz\""
     },
     {
       "customType": "regex",
