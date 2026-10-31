@@ -4,8 +4,8 @@ name: Rust CI
 # main. Pull requests use GitHub-hosted runners, with the toolchain, the
 # Windows SDK and the build cached between runs; a push to main runs the full
 # suite and fills the caches pull requests start from. With `split` the check
-# runs as parallel jobs: the host check and the Windows lint on hosted runners, and the Windows tests
-# natively on the owner's PC when it is online or else under Wine on the
+# runs as parallel jobs: the host check and the Windows lint on hosted
+# runners, and the Windows tests natively on the owner's PC when it is online or else under Wine on the
 # organization runners outside pull requests. The job `check` sums them up
 # and is the required check.
 
@@ -264,7 +264,7 @@ jobs:
         shell: bash
     env:
       # Only the default branch's own runs fill the caches its runs restore.
-      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
+      TRUST: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && 'main' || 'branch' }}
       # Git settings for this job only: the ten runners share one user
       # profile, and writing its global config at once fails on the lock.
       # Long paths for the work tree; no CRLF, which rustfmt rejects.
@@ -318,7 +318,7 @@ jobs:
         shell: bash
     env:
       # Only the default branch's own runs fill the caches its runs restore.
-      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
+      TRUST: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && 'main' || 'branch' }}
       # Git settings for this job only: the ten runners share one user
       # profile, and writing its global config at once fails on the lock.
       # Long paths for the work tree; no CRLF, which rustfmt rejects.
@@ -378,7 +378,7 @@ jobs:
         shell: bash
     env:
       # Only the default branch's own runs fill the caches its runs restore.
-      TRUST: ${{ github.ref == 'refs/heads/main' && contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name) && 'main' || 'branch' }}
+      TRUST: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && 'main' || 'branch' }}
       # Git settings for this job only: the ten runners share one user
       # profile, and writing its global config at once fails on the lock.
       # Long paths for the work tree; no CRLF, which rustfmt rejects.

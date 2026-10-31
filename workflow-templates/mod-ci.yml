@@ -1,15 +1,20 @@
 # The merge gate: `cargo xtask check` on the organization runners through the
-# shared workflow, on every pull request.
+# shared workflow, on every pull request. A push to main fills the build
+# caches pull requests start from.
 name: ci
 
 on:
   pull_request:
+  push:
+    branches: [main]
 
 permissions: {}
 
 concurrency:
-  group: ci-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  # Only a pull request's newer push cancels its older run: a run on main
+  # fills the caches pull requests start from and must finish.
+  group: ci-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   rust:
