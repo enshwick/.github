@@ -123,10 +123,10 @@
         "custom.regex"
       ],
       "matchDepNames": [
-        "rust-cross/cargo-xwin",
+        "cargo-xwin",
         "mozilla/sccache",
-        "nextest-rs/nextest",
-        "EmbarkStudios/cargo-deny",
+        "cargo-nextest",
+        "cargo-deny",
         "llvm/llvm-project",
         "cli/cli"
       ],
@@ -160,9 +160,9 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "rust-version, the toolchain's major and minor, beside the built-in rust-toolchain manager.",
+      "description": "rust-version, the toolchain's major and minor, beside the built-in rust-toolchain manager. Cargo.toml.in is the manifest cargo enshwick new writes for a mod.",
       "managerFilePatterns": [
-        "/(^|/)Cargo\\.toml$/"
+        "/(^|/)Cargo\\.toml(\\.in)?$/"
       ],
       "matchStrings": [
         "rust-version\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+)\""
@@ -174,16 +174,69 @@
     },
     {
       "customType": "regex",
-      "description": "Cargo tools installed in workflows and composite actions, and named in the docs.",
+      "description": "Cargo tools installed in workflows and composite actions, and named in the docs. Each is an exact version, so semver: under the crate datasource's cargo versioning 0.9.149 reads as ^0.9.149 and a patch never comes.",
       "managerFilePatterns": [
         "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
         "/(^|/)\\.github/actions/.+/action\\.ya?ml$/",
         "/\\.md$/"
       ],
       "matchStrings": [
-        "(?:tool:\\s*|,|cargo install --locked )(?<depName>cargo-[a-z0-9-]+)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+        "(?:tools?:\\s*|TOOLS:\\s*|,|cargo install --locked )(?<depName>cargo-[a-z0-9-]+)@(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],
-      "datasourceTemplate": "crate"
+      "datasourceTemplate": "crate",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "The cache of the Windows SDK and CRT cargo-xwin downloads, keyed by the cargo-xwin version that filled it.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "key: xwin-(?:release-)?\\$\\{\\{ runner\\.os \\}\\}-(?<currentValue>\\d+\\.\\d+\\.\\d+)-"
+      ],
+      "depNameTemplate": "cargo-xwin",
+      "datasourceTemplate": "crate",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "cargo-fuzz, installed with cargo install in the fuzz workflows.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "CARGO_FUZZ: (?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "cargo-fuzz",
+      "datasourceTemplate": "crate",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Wrangler, run through bunx in the site workflow and named in the schema URL of wrangler.jsonc.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
+        "/(^|/)wrangler\\.jsonc?$/"
+      ],
+      "matchStrings": [
+        "WRANGLER_VERSION: (?<currentValue>\\d+\\.\\d+\\.\\d+)",
+        "unpkg\\.com/wrangler@(?<currentValue>\\d+\\.\\d+\\.\\d+)/"
+      ],
+      "depNameTemplate": "wrangler",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "The crate versions in the manifest cargo enshwick new writes for a mod, which the cargo manager cannot parse for its placeholders.",
+      "managerFilePatterns": [
+        "/(^|/)Cargo\\.toml\\.in$/"
+      ],
+      "matchStrings": [
+        "\\n(?<depName>[a-z0-9_-]+) = \\{ version = \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
+      ],
+      "datasourceTemplate": "crate",
+      "versioningTemplate": "semver"
     },
     {
       "customType": "regex",
@@ -239,40 +292,43 @@
     },
     {
       "customType": "regex",
-      "description": "rust-cross/cargo-xwin in the composite actions: release tag and the SHA-256 of its download, updated together.",
+      "description": "cargo-xwin in the composite actions: release tag and the SHA-256 of its download, updated together, under the crate's name so they share a branch with its other pins.",
       "managerFilePatterns": [
         "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
       ],
       "matchStrings": [
         "XWIN_TAG: (?<currentValue>v\\d+\\.\\d+\\.\\d+)\\s+XWIN_SHA256: (?<currentDigest>[a-f0-9]{64})"
       ],
-      "depNameTemplate": "rust-cross/cargo-xwin",
+      "depNameTemplate": "cargo-xwin",
+      "packageNameTemplate": "rust-cross/cargo-xwin",
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
     },
     {
       "customType": "regex",
-      "description": "nextest-rs/nextest in the composite actions: release tag and the SHA-256 of its download, updated together.",
+      "description": "cargo-nextest in the composite actions: release tag and the SHA-256 of its download, updated together, under the crate's name so they share a branch with its other pins.",
       "managerFilePatterns": [
         "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
       ],
       "matchStrings": [
         "NEXTEST_TAG: (?<currentValue>cargo-nextest-\\d+\\.\\d+\\.\\d+)\\s+NEXTEST_SHA256: (?<currentDigest>[a-f0-9]{64})"
       ],
-      "depNameTemplate": "nextest-rs/nextest",
+      "depNameTemplate": "cargo-nextest",
+      "packageNameTemplate": "nextest-rs/nextest",
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "regex:^cargo-nextest-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
     },
     {
       "customType": "regex",
-      "description": "EmbarkStudios/cargo-deny in the composite actions: release tag and the SHA-256 of its download, updated together.",
+      "description": "cargo-deny in the composite actions: release tag and the SHA-256 of its download, updated together, under the crate's name so they share a branch with its other pins.",
       "managerFilePatterns": [
         "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
       ],
       "matchStrings": [
         "DENY_TAG: (?<currentValue>\\d+\\.\\d+\\.\\d+)\\s+DENY_SHA256: (?<currentDigest>[a-f0-9]{64})"
       ],
-      "depNameTemplate": "EmbarkStudios/cargo-deny",
+      "depNameTemplate": "cargo-deny",
+      "packageNameTemplate": "EmbarkStudios/cargo-deny",
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
     },
