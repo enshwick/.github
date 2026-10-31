@@ -164,19 +164,6 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "The enshwick release a new mod pins in the mod template's copier.yml, kept on the newest published crate.",
-      "managerFilePatterns": [
-        "/(^|/)copier\\.ya?ml$/"
-      ],
-      "matchStrings": [
-        "enshwick_version:\\n(?:[ \\t]+[^\\n]*\\n)*?[ \\t]+default:[ \\t]*\"(?<currentValue>[^\"]+)\""
-      ],
-      "depNameTemplate": "enshwick",
-      "datasourceTemplate": "crate",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
       "description": "rust-version, the toolchain's major and minor, beside the built-in rust-toolchain manager.",
       "managerFilePatterns": [
         "/(^|/)Cargo\\.toml$/"

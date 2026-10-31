@@ -1,9 +1,8 @@
 name: Organization check
 
-# Once a week: every public repository's settings and `main` ruleset, its
-# shared configuration against template-mod and whether its template is
-# behind (scripts/org-check.sh). The findings go into one open issue here,
-# which closes once nothing is left.
+# Once a week: every public repository's settings and `main` ruleset
+# (scripts/org-check.sh). The findings go into one open issue here, which
+# closes once nothing is left.
 #
 # It runs on a GitHub-hosted runner: it needs none of the organization
 # runners' Rust toolchain, sccache, cargo-xwin or Wine, and those runners
@@ -49,7 +48,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
-          scripts/org-check.sh "$GITHUB_REPOSITORY_OWNER" "$RUNNER_TEMP/org-check" \
+          scripts/org-check.sh "$GITHUB_REPOSITORY_OWNER" \
             > "$RUNNER_TEMP/findings.md" 2> "$RUNNER_TEMP/notes.txt"
           cat "$RUNNER_TEMP/notes.txt" | tee -a "$GITHUB_STEP_SUMMARY"
 
@@ -65,7 +64,7 @@ jobs:
             exit 0
           fi
           {
-            echo "What the organization's repositories differ in from their standard settings and the shared configuration, on $(date -u +%F):"
+            echo "What the organization's repositories differ in from their standard settings, on $(date -u +%F):"
             echo
             cat "$RUNNER_TEMP/findings.md"
           } > "$RUNNER_TEMP/body.md"

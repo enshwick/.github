@@ -16,7 +16,8 @@ Rust or Luau. For players, it is a mod loader with the mods built on it.
 
 ## For mod makers
 
-- Start a new mod from [template-mod](https://github.com/enshwick/template-mod).
+- Start a new mod with `cargo enshwick new`:
+  [getting started](https://enshwick.com/dev/getting-started/).
 - The [developer docs](https://enshwick.com/dev/) explain the API, Luau
   scripts and data packs.
 - The API reference of the `enshwick` crate is on
