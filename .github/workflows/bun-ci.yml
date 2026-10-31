@@ -4,10 +4,6 @@ name: Bun CI
 # install, then `bun run check`, which formats, lints, type-checks and tests.
 # With `artifact` set, `bun run build` follows and the folder it writes is
 # uploaded as the run's artifact of that name. Nothing is released.
-#
-# It runs on a GitHub-hosted runner: it needs none of the organization
-# runners' Rust toolchain, sccache, cargo-xwin or Wine, and those runners
-# are kept for the jobs that do.
 
 on:
   workflow_call:
@@ -39,11 +35,8 @@ jobs:
         with:
           bun-version: 1.4.4
 
-      # Packages land in the runner's tool cache, which every job on it shares.
       # No install scripts: they would only set up local git hooks.
       - name: bun install
-        env:
-          BUN_INSTALL_CACHE_DIR: ${{ runner.tool_cache }}/bun-install-cache
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: bun run check

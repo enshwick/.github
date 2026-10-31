@@ -18,9 +18,8 @@ permissions: {}
 
 jobs:
   bundle:
-    # A fresh GitHub-hosted machine: what ships is built and published
-    # without the organization runners' shared tool cache and sccache,
-    # which branch builds write to.
+    # A fresh machine: what ships is built and published without the
+    # caches that branch builds write to.
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
@@ -33,7 +32,7 @@ jobs:
           persist-credentials: false
 
       # Checked out and used by path: the organization refuses actions not
-      # pinned by SHA. From main, the only ref the runners run workflows from.
+      # pinned by SHA.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: enshwick/.github
@@ -109,7 +108,3 @@ jobs:
             gh release create dev "${assets[@]}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
               --title "$title" --notes "$notes" --prerelease --latest=false
           fi
-
-      - name: sccache statistics
-        if: always() && env.RUSTC_WRAPPER == 'sccache'
-        run: sccache --show-stats

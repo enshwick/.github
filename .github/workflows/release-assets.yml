@@ -32,9 +32,8 @@ permissions: {}
 
 jobs:
   assets:
-    # A fresh GitHub-hosted machine: what ships is built and published
-    # without the organization runners' shared tool cache and sccache,
-    # which branch builds write to.
+    # A fresh machine: what ships is built and published without the
+    # caches that branch builds write to.
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
@@ -112,7 +111,3 @@ jobs:
           shopt -s nullglob
           files=(./*.zip ./*.pdb ./*.cdx.json ./SHA256SUMS)
           gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
-
-      - name: sccache statistics
-        if: always() && env.RUSTC_WRAPPER == 'sccache'
-        run: command -v sccache > /dev/null && sccache --show-stats || true

@@ -168,10 +168,6 @@ jobs:
           for package in $PACKAGES; do args+=(--package "$package"); done
           cargo semver-checks "${args[@]}"
 
-      - name: sccache statistics
-        if: always() && env.RUSTC_WRAPPER == 'sccache'
-        run: command -v sccache > /dev/null && sccache --show-stats || true
-
   # The tests of the crates marked `windows-tests` or `windows-only`, natively
   # on Windows. With `split` the repository's `cargo xtask check` lists the
   # ones a change touches; without, every such crate of the workspace runs.
