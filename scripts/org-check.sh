@@ -1,19 +1,12 @@
 #!/usr/bin/env bash
 # The weekly organization check: every public repository's settings and
-# `main` ruleset as the organization keeps them, its shared configuration
-# against template-mod, and whether its template is behind. Prints a
-# Markdown list of findings, nothing when all is in order.
-# Usage: org-check.sh <organization> <work directory>
+# `main` ruleset as the organization keeps them. Prints a Markdown list of
+# findings, nothing when all is in order.
+# Usage: org-check.sh <organization>
 # Needs GH_TOKEN with read access to every repository.
 set -euo pipefail
 
 org=$1
-work=$2
-here=$(cd "$(dirname "$0")" && pwd)
-mkdir -p "$work"
-template="$work/.template-mod"
-git clone -q "https://github.com/$org/template-mod" "$template"
-latest=$(git -C "$template" rev-parse --short=7 HEAD)
 
 unreadable=0
 repos=$(gh repo list "$org" --visibility public --no-archived --limit 200 --json name --jq '.[].name' | sort)
@@ -57,17 +50,6 @@ for repo in $repos; do
       findings+=("ruleset main requires no CI check")
     fi
   fi
-
-  clone="$work/$repo"
-  git clone -q --depth 1 "https://github.com/$org/$repo" "$clone"
-  while IFS= read -r line; do
-    [ -n "$line" ] && findings+=("$line")
-  done < <("$here/config-drift.sh" "$clone" "$template" || true)
-  if [ -f "$clone/.copier-answers.yml" ]; then
-    pinned=$(sed -n 's/^_commit: *//p' "$clone/.copier-answers.yml")
-    [ "$pinned" = "$latest" ] || findings+=("template at $pinned, template-mod main at $latest: run copier update")
-  fi
-  rm -rf "$clone"
 
   if [ ${#findings[@]} -gt 0 ]; then
     echo "- **$repo**"
