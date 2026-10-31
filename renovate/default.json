@@ -201,19 +201,6 @@
     },
     {
       "customType": "regex",
-      "description": "cargo-fuzz, installed with cargo install in the fuzz workflows.",
-      "managerFilePatterns": [
-        "/(^|/)\\.github/workflows/.+\\.ya?ml$/"
-      ],
-      "matchStrings": [
-        "CARGO_FUZZ: (?<currentValue>\\d+\\.\\d+\\.\\d+)"
-      ],
-      "depNameTemplate": "cargo-fuzz",
-      "datasourceTemplate": "crate",
-      "versioningTemplate": "semver"
-    },
-    {
-      "customType": "regex",
       "description": "Wrangler, run through bunx in the site workflow and named in the schema URL of wrangler.jsonc.",
       "managerFilePatterns": [
         "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
@@ -344,32 +331,6 @@
       "depNameTemplate": "cli/cli",
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
-    },
-    {
-      "customType": "regex",
-      "description": "rhysd/actionlint in the lint workflow: release tag and the SHA-256 of its download, updated together.",
-      "managerFilePatterns": [
-        "/(^|/)\\.github/workflows/lint\\.ya?ml$/"
-      ],
-      "matchStrings": [
-        "ACTIONLINT_TAG: (?<currentValue>v\\d+\\.\\d+\\.\\d+)\\s+ACTIONLINT_SHA256: (?<currentDigest>[a-f0-9]{64})"
-      ],
-      "depNameTemplate": "rhysd/actionlint",
-      "datasourceTemplate": "github-release-attachments",
-      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
-    },
-    {
-      "customType": "regex",
-      "description": "zizmor installed through install-action in the lint workflow.",
-      "managerFilePatterns": [
-        "/(^|/)\\.github/workflows/lint\\.ya?ml$/"
-      ],
-      "matchStrings": [
-        "tool: zizmor@(?<currentValue>\\d+\\.\\d+\\.\\d+)"
-      ],
-      "depNameTemplate": "zizmorcore/zizmor",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.+)$"
     },
     {
       "customType": "regex",
