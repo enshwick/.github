@@ -35,11 +35,8 @@ jobs:
         with:
           bun-version: 1.4.4
 
-      # Packages land in the runner's tool cache, which every job on it shares.
       # No install scripts: they would only set up local git hooks.
       - name: bun install
-        env:
-          BUN_INSTALL_CACHE_DIR: ${{ runner.tool_cache }}/bun-install-cache
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: bun run check

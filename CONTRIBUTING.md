@@ -35,9 +35,8 @@ repository's own `CONTRIBUTING.md` adds how to build and test it.
   never skip them. They compile nothing and take seconds.
 - `cargo xtask check` runs clippy, the tests of what the change touches and
   the doctests; it must pass before you ask for review.
-- CI runs on the organization's own runners. Runs for contributors from
-  outside the organization wait for a maintainer's approval, and a pull
-  request from a fork runs its CI in the fork.
+- CI runs on GitHub-hosted runners. Runs for contributors from outside the
+  organization wait for a maintainer's approval.
 
 ## Security
 

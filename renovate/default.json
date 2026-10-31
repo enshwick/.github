@@ -94,7 +94,7 @@
       "automerge": false
     },
     {
-      "description": "Crates pinned outside Cargo.lock wait three days. Most are tools CI installs through taiki-e/install-action, where a version its manifests lack yet falls back to cargo-binstall, which fails on the runners; the rest (cargo install pins, cache keys, generated manifests) take the same delay.",
+      "description": "Crates pinned outside Cargo.lock wait three days. Most are tools CI installs through taiki-e/install-action, where a version its manifests lack yet falls back to cargo-binstall instead of the download install-action checks; the rest (cargo install pins, cache keys, generated manifests) take the same delay.",
       "matchManagers": [
         "custom.regex"
       ],
