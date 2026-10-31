@@ -86,6 +86,27 @@
       "automerge": true
     },
     {
+      "description": "The docs site checked out at a commit of its main branch, as the mods repository does to check its player pages with the site's checker. Each run moves it to the newest commit, so a new page rule meets the pages in that pull request.",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDatasources": [
+        "git-refs"
+      ],
+      "matchPackageNames": [
+        "https://github.com/enshwick/docs"
+      ],
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "schedule": [
+        "at any time"
+      ],
+      "minimumReleaseAge": null,
+      "groupName": "enshwick docs main",
+      "automerge": true
+    },
+    {
       "description": "The toolchain and rust-version move together and bring new lints, so a person merges them.",
       "matchDepNames": [
         "rust"
@@ -181,6 +202,18 @@
       ],
       "datasourceTemplate": "crate",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Another enshwick repository checked out in a workflow at a full commit of a branch: `repository:`, then `ref: <sha> # <branch>` on the next line.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "repository: (?<depName>enshwick/[a-z0-9.-]+)\\s+ref: (?<currentDigest>[a-f0-9]{40}) # (?<currentValue>[a-z0-9._/-]+)"
+      ],
+      "packageNameTemplate": "https://github.com/{{depName}}",
+      "datasourceTemplate": "git-refs"
     },
     {
       "customType": "regex",
