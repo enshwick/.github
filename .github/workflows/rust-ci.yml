@@ -1,13 +1,11 @@
 name: Rust CI
 
 # `cargo xtask check` for a pull request, a merge queue entry or a push to
-# main. Pull requests use GitHub-hosted runners, with the toolchain, the
-# Windows SDK and the build cached between runs; a push to main runs the full
-# suite and fills the caches pull requests start from. With `split` the check
-# runs as parallel jobs: the host check and the Windows lint on hosted
-# runners, and the Windows tests natively on the owner's PC when it is online or else under Wine on the
-# organization runners outside pull requests. The job `check` sums them up
-# and is the required check.
+# main, on GitHub-hosted runners, with the toolchain, the Windows SDK and the
+# build cached between runs; a push to main runs the full suite and fills the
+# caches pull requests start from. With `split` the host check and the
+# Windows lint run as parallel jobs. The Windows tests run natively on a
+# Windows runner. The job `check` sums them up and is the required check.
 
 on:
   workflow_call:
@@ -17,32 +15,17 @@ on:
         type: boolean
         default: false
       windows-tests:
-        description: Run the Windows-only crates' tests under Wine.
+        description: Run the Windows-only crates' tests natively on a GitHub-hosted Windows runner.
         type: boolean
         default: true
       split:
-        description: Run the host check, the Windows lint and the Windows tests as parallel jobs; the repository's `cargo xtask check` must know `--part`.
+        description: Run the host check and the Windows lint as parallel jobs and only the Windows tests a change touches; the repository's `cargo xtask check` must know `--part` and `--list-windows-tests`.
         type: boolean
         default: false
-      native-tests:
-        description: Run the Windows tests natively on the owner's PC while it is online, and under Wine on the organization runners while it is offline, pull requests included. A native failure fails the check. Off, they run under Wine outside pull requests.
-        type: boolean
-        default: false
-      clippy-features:
-        description: Features the Windows lint on the owner's PC turns on, as `cargo clippy --features` takes them.
-        type: string
-        default: ""
       semver:
         description: Packages checked with cargo-semver-checks against their last release on crates.io, space-separated; none when empty.
         type: string
         default: ""
-    secrets:
-      ENSHWICK_CI_CLIENT_ID:
-        description: The enshwick-ci app, which tells whether the owner's Windows runners are online.
-        required: false
-      ENSHWICK_CI_PRIVATE_KEY:
-        description: The enshwick-ci app's private key.
-        required: false
 
 permissions: {}
 
@@ -100,8 +83,8 @@ jobs:
           echo "skip=$reason" >> "$GITHUB_OUTPUT"
 
   part:
-    needs: [scope, windows-gate]
-    if: always() && needs.scope.result == 'success' && needs.scope.outputs.skip == ''
+    needs: scope
+    if: needs.scope.outputs.skip == ''
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
@@ -109,7 +92,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The Windows lint runs here only while the owner's PC is offline.
         part: ${{ fromJSON(inputs.split && '["host", "windows-lint"]' || '["all"]') }}
     env:
       # A merge queue entry is checked against the entry before it (its
@@ -117,21 +99,15 @@ jobs:
       BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
       FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
       PART: ${{ matrix.part }}
-      # The Windows lint runs on the owner's PC while it is online.
-      # Without `split`, the whole check runs there.
-      ON_PC: ${{ (matrix.part == 'windows-lint' || matrix.part == 'all') && needs.windows-gate.outputs.native == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: env.ON_PC != 'true'
         with:
           fetch-depth: 0
           persist-credentials: false
 
       # Checked out and used by path: the organization refuses actions not
-      # pinned by SHA, and actionlint cannot read the `$/` form yet. From
-      # main, the only ref the runners run workflows from.
+      # pinned by SHA, and actionlint cannot read the `$/` form yet.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: env.ON_PC != 'true'
         with:
           repository: enshwick/.github
           ref: main
@@ -139,41 +115,34 @@ jobs:
           persist-credentials: false
 
       - name: Fetch the base
-        if: env.ON_PC != 'true'
         run: git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
 
-      # On a GitHub-hosted runner nothing persists between jobs: the
-      # toolchain, the Windows SDK and the apt packages come from the cache;
-      # GE-Proton's Wine downloads faster than a cache restores it.
-      - if: env.ON_PC != 'true' && (runner.environment == 'github-hosted')
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # Nothing persists between jobs: the toolchain, the Windows SDK and the
+      # apt packages come from the cache.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/rustup
           key: rustup-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
       # The Windows SDK and CRT cargo-xwin downloads, about 12 minutes from
-      # Microsoft on a hosted runner; only the Windows parts fill it.
-      - if: env.ON_PC != 'true' && (runner.environment == 'github-hosted' && matrix.part != 'host')
+      # Microsoft on a hosted runner. Only the cross-compiling parts here
+      # (`windows-lint`, `all`) use it; the job `windows` builds natively.
+      - if: matrix.part != 'host'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/xwin
           key: xwin-${{ runner.os }}-0.23.1-v1
       # clang of the toolchain's LLVM.
-      - if: env.ON_PC != 'true' && (runner.environment == 'github-hosted')
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/apt-archives
           key: apt-${{ runner.os }}-${{ matrix.part }}-v2
 
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
-        if: env.ON_PC != 'true'
         with:
-          # cargo-nextest 0.9.150 (2026-10-26) is not yet in install-action's manifests.
           tools: cargo-nextest@0.9.150,cargo-deny@0.20.2${{ inputs.semver != '' && matrix.part != 'windows-lint' && ',cargo-semver-checks@0.51.0' || '' }}
-          wine: ${{ matrix.part == 'all' && inputs.windows-tests }}
 
       # The build itself, per part: each job builds a different target.
-      - if: env.ON_PC != 'true' && (runner.environment == 'github-hosted')
-        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # A cache saved by a failed run would be restored as it is and
           # never replaced, so only a finished run saves one.
@@ -181,24 +150,17 @@ jobs:
           key: ${{ matrix.part }}
 
       - name: cargo xtask check
-        if: env.ON_PC != 'true'
-        env:
-          WINDOWS: ${{ inputs.windows-tests }}
         run: |
           args=()
           if [ "$FULL" = true ]; then args+=(--all); else args+=(--base "$BASE"); fi
-          if [ "$PART" = all ]; then
-            if [ "$WINDOWS" = true ]; then args+=(--windows); fi
-          else
-            args+=(--part "$PART")
-          fi
+          if [ "$PART" != all ]; then args+=(--part "$PART"); fi
           if [ "$PART" = all ] || [ "$PART" = host ]; then cargo fmt --all --check; fi
           cargo xtask check "${args[@]}"
 
       # A version that claims less change than the public API made fails;
       # unreleased changes keep the released version and pass.
       - name: cargo semver-checks
-        if: env.ON_PC != 'true' && (inputs.semver != '' && (matrix.part == 'all' || matrix.part == 'host'))
+        if: inputs.semver != '' && (matrix.part == 'all' || matrix.part == 'host')
         env:
           PACKAGES: ${{ inputs.semver }}
         run: |
@@ -207,226 +169,70 @@ jobs:
           cargo semver-checks "${args[@]}"
 
       - name: sccache statistics
-        if: env.ON_PC != 'true' && (always() && env.RUSTC_WRAPPER == 'sccache')
+        if: always() && env.RUSTC_WRAPPER == 'sccache'
         run: command -v sccache > /dev/null && sccache --show-stats || true
 
-  # The Windows tests (with `split`) run natively on the owner's PC when one
-  # of its runners is online, and otherwise, or when the native run failed,
-  # under Wine on the organization runners outside pull requests: under Wine
-  # one loader test depends on the CPU and fails on GitHub's machines.
-  windows-gate:
+  # The tests of the crates marked `windows-tests` or `windows-only`, natively
+  # on Windows. With `split` the repository's `cargo xtask check` lists the
+  # ones a change touches; without, every such crate of the workspace runs.
+  windows:
     needs: scope
-    if: needs.scope.outputs.skip == ''
-    runs-on: ubuntu-26.04
-    timeout-minutes: 3
-    permissions: {}
-    outputs:
-      native: ${{ steps.online.outputs.native }}
+    if: inputs.windows-tests && needs.scope.outputs.skip == ''
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
     env:
-      HAS_APP: ${{ secrets.ENSHWICK_CI_CLIENT_ID != '' }}
+      BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
+      FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
+      SPLIT: ${{ inputs.split }}
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
     steps:
-      - name: Mint the enshwick-ci token
-        id: token
-        if: env.HAS_APP == 'true'
-        continue-on-error: true
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          client-id: ${{ secrets.ENSHWICK_CI_CLIENT_ID }}
-          private-key: ${{ secrets.ENSHWICK_CI_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          permission-organization-self-hosted-runners: read
-      - name: Is a PC runner online
-        id: online
-        env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch the base
+        run: git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
+
+      - name: Install the toolchain
         run: |
-          count=0
-          if [ -n "$GH_TOKEN" ]; then
-            count=$(gh api --paginate "orgs/$GITHUB_REPOSITORY_OWNER/actions/runners" --jq \
-              '.runners[] | select(.status == "online") | select([.labels[].name] | index("enshwick-pc")) | .name' |
-              wc -l) || count=0
+          rustup toolchain install
+          rustc --version
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          prefix-key: v1-rust
+          key: windows
+
+      - name: Windows tests to run
+        id: list
+        run: |
+          if [ "$SPLIT" = true ]; then
+            args=()
+            if [ "$FULL" = true ]; then args+=(--all); else args+=(--base "$BASE"); fi
+            tests=$(cargo xtask check "${args[@]}" --list-windows-tests | xargs)
+          else
+            tests=$(cargo metadata --no-deps --format-version 1 | jq -r \
+              '.packages[] | select(.metadata.enshwick["windows-tests"] == true or .metadata.enshwick["windows-only"] == true) | .name' |
+              xargs)
           fi
-          echo "PC runners online: $count"
-          if [ "$count" -gt 0 ]; then echo "native=true"; else echo "native=false"; fi >> "$GITHUB_OUTPUT"
-
-  # The Windows lint (clippy for the msvc target) on the owner's PC while it
-  # is online; otherwise the part `windows-lint` runs it with cargo-xwin on
-  # a hosted runner.
-  windows-lint-native:
-    needs: [scope, windows-gate]
-    if: inputs.split && needs.windows-gate.outputs.native == 'true'
-    runs-on: [self-hosted, Windows, X64, enshwick-pc]
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    defaults:
-      run:
-        shell: bash
-    env:
-      # Only the default branch's own runs fill the caches its runs restore.
-      TRUST: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && 'main' || 'branch' }}
-      # Git settings for this job only: the ten runners share one user
-      # profile, and writing its global config at once fails on the lock.
-      # Long paths for the work tree; no CRLF, which rustfmt rejects.
-      GIT_CONFIG_COUNT: "2"
-      GIT_CONFIG_KEY_0: core.longpaths
-      GIT_CONFIG_VALUE_0: "true"
-      GIT_CONFIG_KEY_1: core.autocrlf
-      GIT_CONFIG_VALUE_1: "false"
-      # Ten runners share one 16-core PC that is also the owner's.
-      CARGO_BUILD_JOBS: "3"
-      FEATURES: ${{ inputs.clippy-features }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: enshwick/.github
-          ref: main
-          path: .enshwick-ci
-          persist-credentials: false
-
-      - uses: ./.enshwick-ci/.github/actions/setup-rust-windows # zizmor: ignore[self-repository]
-        with:
-          trust: ${{ env.TRUST }}
-
-      - name: Windows lint
-        run: |
-          # cargo-xwin's PATH is in Windows form and would hide bash's tools.
-          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep -v '^export PATH=')"
-          args=(--target x86_64-pc-windows-msvc --workspace --all-targets)
-          if [ -n "$FEATURES" ]; then args+=(--features "$FEATURES"); fi
-          cargo clippy "${args[@]}" -- -D warnings
-
-      - name: Clean up
-        if: always()
-        run: rm -rf target
-
-  # Without `split`, the whole check on the owner's PC while it is online:
-  # on Windows `cargo xtask check` builds and tests every package natively.
-  all-native:
-    needs: [scope, windows-gate]
-    if: ${{ !inputs.split && needs.windows-gate.outputs.native == 'true' }}
-    runs-on: [self-hosted, Windows, X64, enshwick-pc]
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    defaults:
-      run:
-        shell: bash
-    env:
-      # Only the default branch's own runs fill the caches its runs restore.
-      TRUST: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && 'main' || 'branch' }}
-      # Git settings for this job only: the ten runners share one user
-      # profile, and writing its global config at once fails on the lock.
-      # Long paths for the work tree; no CRLF, which rustfmt rejects.
-      GIT_CONFIG_COUNT: "2"
-      GIT_CONFIG_KEY_0: core.longpaths
-      GIT_CONFIG_VALUE_0: "true"
-      GIT_CONFIG_KEY_1: core.autocrlf
-      GIT_CONFIG_VALUE_1: "false"
-      BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
-      FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
-      # Ten runners share one 16-core PC that is also the owner's.
-      CARGO_BUILD_JOBS: "3"
-      NEXTEST_TEST_THREADS: "3"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: enshwick/.github
-          ref: main
-          path: .enshwick-ci
-          persist-credentials: false
-
-      - name: Fetch the base
-        run: git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
-
-      - uses: ./.enshwick-ci/.github/actions/setup-rust-windows # zizmor: ignore[self-repository]
-        with:
-          trust: ${{ env.TRUST }}
-
-      - name: cargo xtask check
-        run: |
-          # cargo-xwin's PATH is in Windows form and would hide bash's tools.
-          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep -v '^export PATH=')"
-          unset CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER
-          args=()
-          if [ "$FULL" = true ]; then args+=(--all); else args+=(--base "$BASE"); fi
-          cargo fmt --all --check
-          cargo run --quiet -p xtask -- check "${args[@]}"
-
-      - name: Clean up
-        if: always()
-        run: rm -rf target
-
-  windows-native:
-    needs: [scope, windows-gate]
-    if: inputs.native-tests && needs.windows-gate.outputs.native == 'true'
-    runs-on: [self-hosted, Windows, X64, enshwick-pc]
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    defaults:
-      run:
-        shell: bash
-    env:
-      # Only the default branch's own runs fill the caches its runs restore.
-      TRUST: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && 'main' || 'branch' }}
-      # Git settings for this job only: the ten runners share one user
-      # profile, and writing its global config at once fails on the lock.
-      # Long paths for the work tree; no CRLF, which rustfmt rejects.
-      GIT_CONFIG_COUNT: "2"
-      GIT_CONFIG_KEY_0: core.longpaths
-      GIT_CONFIG_VALUE_0: "true"
-      GIT_CONFIG_KEY_1: core.autocrlf
-      GIT_CONFIG_VALUE_1: "false"
-      BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
-      FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
-      # Ten runners share one 16-core PC that is also the owner's.
-      CARGO_BUILD_JOBS: "3"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: enshwick/.github
-          ref: main
-          path: .enshwick-ci
-          persist-credentials: false
-
-      - name: Fetch the base
-        run: git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
-
-      - uses: ./.enshwick-ci/.github/actions/setup-rust-windows # zizmor: ignore[self-repository]
-        with:
-          trust: ${{ env.TRUST }}
-
-      # cargo-xwin's environment, then plain cargo: the tests run natively
-      # (no runner) and cargo's exit status reaches the job. One test thread,
-      # as under Wine: the hook and patch tests share the process.
-      - name: Windows tests
-        run: |
-          # Its PATH is in Windows form and would hide bash's tools.
-          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep -v '^export PATH=')"
-          unset CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUNNER
-          args=()
-          if [ "$FULL" = true ]; then args+=(--all); else args+=(--base "$BASE"); fi
-          tests=$(cargo run --quiet --target x86_64-pc-windows-msvc -p xtask -- \
-            check "${args[@]}" --list-windows-tests | xargs)
           echo "Windows tests: ${tests:-none}"
-          [ -n "$tests" ] || exit 0
+          echo "tests=$tests" >> "$GITHUB_OUTPUT"
+
+      # One test thread: the hook and patch tests share the process.
+      - name: Windows tests
+        if: steps.list.outputs.tests != ''
+        env:
+          TESTS: ${{ steps.list.outputs.tests }}
+        run: |
           packages=()
-          for package in $tests; do packages+=(-p "$package"); done
+          for package in $TESTS; do packages+=(-p "$package"); done
           status=0
           cargo test --target x86_64-pc-windows-msvc "${packages[@]}" -- --test-threads 1 || status=$?
           if [ "$status" != 0 ]; then
@@ -444,72 +250,9 @@ jobs:
           fi
           exit "$status"
 
-      # The work tree's build output goes; the shared caches stay.
-      - name: Clean up
-        if: always()
-        run: rm -rf target
-
-  # The Windows tests under Wine on the organization runners: while the
-  # owner's PC is offline, or for callers without `native-tests` outside
-  # pull requests. Never for a pull request from a fork: its code does not
-  # reach these runners, and a maintainer runs the tests from a branch.
-  windows-wine:
-    needs: [scope, windows-gate, windows-native]
-    if: >-
-      always() && inputs.split && needs.scope.outputs.skip == ''
-      && (github.event_name != 'pull_request' || inputs.native-tests)
-      && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-      && (needs.windows-gate.outputs.native != 'true' || !inputs.native-tests)
-    runs-on: enshwick
-    timeout-minutes: 45
-    permissions:
-      contents: read
-    env:
-      BASE: ${{ github.event.merge_group.base_sha || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}
-      FULL: ${{ inputs.full || (github.event_name != 'pull_request' && github.event_name != 'merge_group') }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: enshwick/.github
-          ref: main
-          path: .enshwick-ci
-          persist-credentials: false
-
-      - name: Fetch the base
-        run: git cat-file -e "$BASE^{commit}" 2> /dev/null || git fetch -q origin "$BASE"
-
-      - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
-        with:
-          # cargo-nextest 0.9.150 (2026-10-26) is not yet in install-action's manifests.
-          tools: cargo-nextest@0.9.150
-
-      - name: Windows tests to run
-        id: list
-        run: |
-          args=()
-          if [ "$FULL" = true ]; then args+=(--all); else args+=(--base "$BASE"); fi
-          tests=$(cargo xtask check "${args[@]}" --list-windows-tests | xargs)
-          echo "Windows tests: ${tests:-none}"
-          echo "tests=$tests" >> "$GITHUB_OUTPUT"
-      - if: steps.list.outputs.tests != ''
-        uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
-        with:
-          wine: true
-      - name: Windows tests under Wine
-        if: steps.list.outputs.tests != ''
-        run: |
-          args=()
-          if [ "$FULL" = true ]; then args+=(--all); else args+=(--base "$BASE"); fi
-          cargo xtask check "${args[@]}" --part windows-tests
-
   # The required check: every part passed, or there was nothing to prove.
   check:
-    needs: [scope, part, windows-gate, windows-lint-native, all-native, windows-native, windows-wine]
+    needs: [scope, part, windows]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 2
@@ -519,16 +262,8 @@ jobs:
         env:
           SCOPE: ${{ needs.scope.result }}
           PART: ${{ needs.part.result }}
-          GATE: ${{ needs.windows-gate.result }}
-          LINT: ${{ needs.windows-lint-native.result }}
-          ALL: ${{ needs.all-native.result }}
-          NATIVE: ${{ needs.windows-native.result }}
-          WINE: ${{ needs.windows-wine.result }}
+          WINDOWS: ${{ needs.windows.result }}
         run: |
-          echo "scope: $SCOPE, parts: $PART, Windows gate: $GATE, PC lint: $LINT, PC whole check: $ALL, PC tests: $NATIVE, Wine: $WINE"
+          echo "scope: $SCOPE, parts: $PART, Windows tests: $WINDOWS"
           ok() { [ "$1" = success ] || [ "$1" = skipped ]; }
-          # The Windows tests passed on one path, or neither had to run.
-          windows=false
-          if [ "$NATIVE" = success ] || [ "$WINE" = success ]; then windows=true; fi
-          if [ "$NATIVE" = skipped ] && [ "$WINE" = skipped ]; then windows=true; fi
-          [ "$SCOPE" = success ] && ok "$PART" && ok "$GATE" && ok "$LINT" && ok "$ALL" && [ "$windows" = true ]
+          [ "$SCOPE" = success ] && ok "$PART" && ok "$WINDOWS"
