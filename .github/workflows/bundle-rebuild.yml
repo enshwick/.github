@@ -3,7 +3,8 @@ name: Bundle rebuild
 # Starts the platform's dev-build on enshwick/enshwick after a mod's dev
 # build, so the dev bundle's enshwick.zip, which takes each mod from its
 # `dev` prerelease, carries the mod just built. Only a mod that
-# tools/mods.toml lists is in the bundle; any other caller starts nothing.
+# tools/mods.toml lists is in the bundle; any other caller starts nothing,
+# and so does every caller once the platform has no tools/mods.toml.
 # The platform's dev-build runs one at a time and builds only the newest of
 # the runs that wait, so a burst of mod builds ends in one bundle.
 
@@ -41,6 +42,11 @@ jobs:
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
           platform="$GITHUB_REPOSITORY_OWNER/enshwick"
+          listed=$(gh api "repos/$platform/contents/tools" --jq '.[] | select(.name == "mods.toml") | .name')
+          if [[ -z "$listed" ]]; then
+            echo "$platform has no dev bundle; nothing to rebuild."
+            exit 0
+          fi
           mods=$(gh api "repos/$platform/contents/tools/mods.toml" -H 'Accept: application/vnd.github.raw')
           if ! grep -qxF "repository = \"$GITHUB_REPOSITORY\"" <<< "$mods"; then
             echo "$GITHUB_REPOSITORY is not in the dev bundle; nothing to rebuild."
