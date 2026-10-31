@@ -50,6 +50,16 @@
       "groupName": "wasmtime"
     },
     {
+      "description": "The docs site stays on TypeScript 6: astro check refuses TypeScript 7.0, and its replacement, @astrojs/ts-content-mapper, needs TypeScript 7.1 or later.",
+      "matchRepositories": [
+        "enshwick/docs"
+      ],
+      "matchPackageNames": [
+        "typescript"
+      ],
+      "allowedVersions": "<7"
+    },
+    {
       "description": "Our own crates: picked up on the next run, prereleases included while the platform is in alpha, all in one update.",
       "matchPackageNames": [
         "/^enshwick(-|$)/",
