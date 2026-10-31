@@ -3,8 +3,8 @@ name: Rust CI
 # `cargo xtask check` for a pull request, a merge queue entry or a push to
 # main. Pull requests use GitHub-hosted runners, with the toolchain, the
 # Windows SDK and the build cached between runs; a push to main runs the full
-# suite and fills the caches pull requests start from. With `split` the check runs as parallel jobs: the
-# host check and the Windows lint on hosted runners, and the Windows tests
+# suite and fills the caches pull requests start from. With `split` the check
+# runs as parallel jobs: the host check and the Windows lint on hosted runners, and the Windows tests
 # natively on the owner's PC when it is online or else under Wine on the
 # organization runners outside pull requests. The job `check` sums them up
 # and is the required check.
@@ -60,20 +60,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: enshwick/.github
-          ref: main
-          path: .enshwick-ci
-          persist-credentials: false
-
-      # The shared configuration stays as template-mod rendered it, and
-      # renovate.json only extends the shared preset.
-      - name: Shared configuration
-        run: |
-          git clone -q https://github.com/enshwick/template-mod "$RUNNER_TEMP/template-mod"
-          .enshwick-ci/scripts/config-drift.sh . "$RUNNER_TEMP/template-mod"
-
       # Work already proven is not repeated: a merge queue group whose tree
       # is its pull request's own head passed that pull request's check, and
       # a change to files that never build (documents outside the book,
@@ -103,7 +89,7 @@ jobs:
             fi
           fi
           if [ -z "$reason" ] && [ "$FULL" != true ]; then
-            never='^(\.github/|[^/]+\.md$|(.*/)?CHANGELOG\.md$|LICENSE$|\.gitignore$|\.gitattributes$|renovate\.json$|_typos\.toml$|\.markdownlint-cli2\.yaml$|lefthook\.yml$|committed\.toml$|release-plz\.toml$|\.copier-answers\.yml$|package\.json$|bun\.lock$)'
+            never='^(\.github/|[^/]+\.md$|(.*/)?CHANGELOG\.md$|LICENSE$|\.gitignore$|\.gitattributes$|renovate\.json$|_typos\.toml$|\.markdownlint-cli2\.yaml$|lefthook\.yml$|committed\.toml$|release-plz\.toml$|package\.json$|bun\.lock$)'
             if ! git diff --name-only "$BASE...HEAD" | grep -qvE "$never"; then
               reason="no file that builds changed"
             fi
