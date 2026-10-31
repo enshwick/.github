@@ -178,7 +178,7 @@ jobs:
   windows:
     needs: scope
     if: inputs.windows-tests && needs.scope.outputs.skip == ''
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 45
     permissions:
       contents: read
