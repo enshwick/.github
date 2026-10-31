@@ -1,9 +1,8 @@
 name: Rust fuzz
 
 # A short run of every cargo-fuzz target in a repository's fuzz/, from its
-# seed corpus, for pull requests that touch what the targets read. The
-# nightly lane runs the same targets for minutes; this run is seconds each,
-# under a minute of fuzzing in all.
+# seed corpus, for pull requests that touch what the targets read: seconds
+# each, under a minute of fuzzing in all.
 
 on:
   workflow_call:

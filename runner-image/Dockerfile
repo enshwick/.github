@@ -13,10 +13,9 @@ LABEL org.opencontainers.image.source=https://github.com/enshwick/.github \
 USER root
 
 # clang of the Rust toolchain's LLVM major from apt.llvm.org, with its
-# sanitizer runtime, for cargo-xwin and the nightly's sanitized builds
-# (setup-rust installs another major if the toolchain moved on); the
-# 32-bit C runtime for SteamCMD, jq for the workflows' scripts, xz for
-# tools packed as .tar.xz. apt.llvm.org's key
+# sanitizer runtime, for cargo-xwin and sanitized builds (setup-rust
+# installs another major if the toolchain moved on); jq for the workflows'
+# scripts, xz for tools packed as .tar.xz. apt.llvm.org's key
 # (6084F3CF814B57C1CF12EFD515CF4D18AF4F7421) is checked against its SHA-256.
 # No Wine here: setup-rust sets up GE-Proton's, which loads FreeType
 # for its fonts.
@@ -34,7 +33,7 @@ RUN set -eu; \
       > "/etc/apt/sources.list.d/llvm-$LLVM_MAJOR.list"; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        "clang-$LLVM_MAJOR" "libclang-rt-$LLVM_MAJOR-dev" libfreetype6 lib32gcc-s1 jq xz-utils; \
+        "clang-$LLVM_MAJOR" "libclang-rt-$LLVM_MAJOR-dev" libfreetype6 jq xz-utils; \
     rm -rf /var/lib/apt/lists/*; \
     # Ubuntu's packages carry no clang-cl; clang called by that name works
     # as one. First on PATH, ahead of anything else named clang. It is cc

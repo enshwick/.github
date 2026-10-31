@@ -7,8 +7,8 @@ name: Docs site
 # job summary. Both need the two Cloudflare secrets from the caller; without
 # them, as on a pull request from a fork, the build is only checked. The
 # build collects pages from other public repositories (the platform's book at
-# each version's ref), so a deploy also runs when those change, by hand or on
-# a schedule in the caller.
+# each version's ref), so a deploy also runs when those change, by hand or
+# through docs-rebuild.
 #
 # It runs on a GitHub-hosted runner: it needs none of the organization
 # runners' Rust toolchain, sccache, cargo-xwin or Wine, and those runners
