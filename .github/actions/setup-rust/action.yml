@@ -1,15 +1,12 @@
 name: Set up Rust
 description: >-
-  Rust from rust-toolchain.toml, cargo-xwin for the Windows target and
-  sccache, kept in the runners' persistent tool cache.
+  Rust from rust-toolchain.toml and cargo-xwin for the Windows target, in
+  the tool cache that the calling workflow caches.
 
 inputs:
   tools:
     description: More tools for taiki-e/install-action, comma-separated (cargo-nextest,cargo-deny).
     default: ""
-  wine:
-    description: Set up the Wine of GE-Proton to run Windows test executables.
-    default: "false"
   sanitizers:
     description: Install clang's sanitizer headers, for C and C++ that dependencies build under a sanitizer.
     default: "false"
@@ -33,74 +30,6 @@ runs:
           echo "CARGO_TERM_COLOR=always"
         } >> "$GITHUB_ENV"
         echo "$cache/cargo/bin" >> "$GITHUB_PATH"
-        if [ -d /ci-cache/sccache ] && [ -w /ci-cache/sccache ]; then
-          {
-            echo "SCCACHE_DIR=/ci-cache/sccache"
-            echo "SCCACHE_CACHE_SIZE=15G"
-            echo "RUSTC_WRAPPER=sccache"
-            # A lost connection to the server compiles without the cache
-            # instead of failing the build.
-            echo "SCCACHE_IGNORE_SERVER_IO_ERROR=1"
-          } >> "$GITHUB_ENV"
-        fi
-
-    # Wine runs Windows test executables: the Wine of GE-Proton, run outside
-    # Steam, downloaded once into the tool cache and checked against its
-    # published SHA-512. A prefix made once beside it is copied for each
-    # job, so no two jobs share a running prefix. Measured against Ubuntu's
-    # Wine on 2026-10-27: the same tests pass, as fast on the organization
-    # runners, and on a hosted runner in 20 s instead of an apt install of
-    # 12 to 32 minutes.
-    - name: Wine from GE-Proton
-      if: inputs.wine == 'true'
-      shell: bash
-      env:
-        GE_PROTON: GE-Proton11-11
-        GE_PROTON_SHA512: 45721a7b625b2404d8896bb5e2a8b87fc9623a394873a6dd6b900c839681d5c01ec694ca00d003fc9c733c5f6c5648af8171985656f9fa47e20999fbebdbe235
-      run: | # zizmor: ignore[github-env] fixed paths only
-        root="${RUNNER_TOOL_CACHE:-$HOME/.cache}/ge-proton"
-        dir="$root/$GE_PROTON"
-        mkdir -p "$root"
-        # Jobs share the tool cache: one sets up a version at a time.
-        (
-          flock 9
-          if [ ! -x "$dir/files/bin/wine" ]; then
-            archive="$RUNNER_TEMP/ge-proton.tar.gz"
-            curl --proto '=https' --tlsv1.2 -sSfL -o "$archive" \
-              "https://github.com/GloriousEggroll/proton-ge-custom/releases/download/$GE_PROTON/$GE_PROTON-x86_64.tar.gz"
-            echo "$GE_PROTON_SHA512  $archive" | sha512sum -c -
-            rm -rf "$dir.part"
-            mkdir -p "$dir.part"
-            tar -xzf "$archive" -C "$dir.part" --strip-components 1
-            rm -f "$archive"
-            mv "$dir.part" "$dir"
-          fi
-          if [ ! -f "$dir.prefix/system.reg" ]; then
-            rm -rf "$dir.prefix.part"
-            # GE-Proton carries Wine's programs, not its wineboot script;
-            # wineboot returns before wineserver has written the registry.
-            WINEPREFIX="$dir.prefix.part" WINEDEBUG=-all "$dir/files/bin/wine" wineboot -i > /dev/null 2>&1
-            WINEPREFIX="$dir.prefix.part" "$dir/files/bin/wineserver" -w
-            test -f "$dir.prefix.part/system.reg"
-            mv "$dir.prefix.part" "$dir.prefix"
-          fi
-          # Versions this step no longer names go.
-          for old in "$root"/*; do
-            case "${old##*/}" in
-              "$GE_PROTON" | "$GE_PROTON.prefix") ;;
-              *) rm -rf "$old" ;;
-            esac
-          done
-        ) 9> "$root.lock"
-        prefix="$RUNNER_TEMP/wine-prefix"
-        rm -rf "$prefix"
-        cp -a "$dir.prefix" "$prefix"
-        {
-          echo "WINEPREFIX=$prefix"
-          echo "WINEDEBUG=-all"
-        } >> "$GITHUB_ENV"
-        echo "$dir/files/bin" >> "$GITHUB_PATH"
-        "$dir/files/bin/wine" --version
 
     - name: Install the toolchain
       shell: bash
@@ -109,16 +38,15 @@ runs:
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
             | sh -s -- -y --profile minimal --default-toolchain none --no-modify-path
         fi
-        # Jobs share RUSTUP_HOME: one installs a new toolchain at a time.
-        flock "$RUSTUP_HOME.lock" rustup toolchain install
+        rustup toolchain install
         rustc --version
 
     # clang of the Rust toolchain's own LLVM major, from apt.llvm.org, for
     # the C and C++ that dependencies build: cargo-xwin calls it as
     # clang-cl, the MSVC headers refuse an old one, and one LLVM keeps
-    # objects, sanitizer runtime and linker in step. The runner image
-    # carries it; elsewhere it is installed here, the packages kept in the
-    # tool cache. With `sanitizers`, also its sanitizer runtime and headers.
+    # objects, sanitizer runtime and linker in step. The packages are kept
+    # in the tool cache. With `sanitizers`, also its sanitizer runtime and
+    # headers.
     - name: clang of the toolchain's LLVM
       shell: bash
       env:
@@ -159,8 +87,8 @@ runs:
         ln -sf "$llvm/bin/clang" "$RUNNER_TEMP/llvm/clang"
         ln -sf "$llvm/bin/clang" "$RUNNER_TEMP/llvm/clang-cl"
         ln -sf "$llvm/bin/clang++" "$RUNNER_TEMP/llvm/clang++"
-        # Build scripts link with cc. A runner without one, as an image built
-        # on apt.llvm.org's packages alone, takes this clang as cc and c++.
+        # Build scripts link with cc. A runner without one takes this clang
+        # as cc and c++.
         if ! command -v cc > /dev/null; then
           ln -sf "$llvm/bin/clang" "$RUNNER_TEMP/llvm/cc"
           ln -sf "$llvm/bin/clang++" "$RUNNER_TEMP/llvm/c++"
@@ -180,51 +108,16 @@ runs:
         test -x "$lld"
         mkdir -p "$RUNNER_TEMP/lld"
         ln -sf "$lld" "$RUNNER_TEMP/lld/lld-link"
-        flock "$RUSTUP_HOME.lock" rustup component add llvm-tools > /dev/null
+        rustup component add llvm-tools > /dev/null
         ln -sf "$(dirname "$lld")/llvm-ar" "$RUNNER_TEMP/lld/llvm-lib"
         echo "$RUNNER_TEMP/lld" >> "$GITHUB_PATH"
         "$lld" -flavor link --version
 
-    # Each job installs the tools into a directory of its own: installing
-    # into the shared cache would overwrite a binary a concurrent job is
-    # running ("text file busy"). The prebuilt downloads take seconds.
-    - name: Give the tools a directory of this job
-      shell: bash
-      run: | # zizmor: ignore[github-env] fixed paths only
-        tools="$RUNNER_TEMP/tools"
-        mkdir -p "$tools/bin"
-        ln -sf "$(command -v cargo)" "$tools/bin/cargo"
-        echo "SHARED_CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
-        echo "CARGO_HOME=$tools" >> "$GITHUB_ENV"
-        echo "$tools/bin" >> "$GITHUB_PATH"
-
-    # The runner image lists the tools it carries; only the others are
-    # installed.
-    - name: Tools the image lacks
-      id: tools
-      shell: bash
-      env:
-        TOOLS: cargo-xwin@0.23.1,sccache@0.19.0${{ inputs.tools != '' && format(',{0}', inputs.tools) || '' }}
-      run: |
-        missing=()
-        IFS=, read -ra wanted <<< "$TOOLS"
-        for tool in "${wanted[@]}"; do
-          grep -qxF "$tool" /opt/enshwick-tools/list 2> /dev/null || missing+=("$tool")
-        done
-        echo "missing=$(IFS=,; echo "${missing[*]}")" >> "$GITHUB_OUTPUT"
-
     # Every version here must be in install-action's manifests at this SHA:
-    # a version it lacks falls back to cargo-binstall, which fails in the
-    # per-job tools directory.
-    - if: steps.tools.outputs.missing != ''
-      uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
+    # a version it lacks falls back to cargo-binstall.
+    - uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
       with:
-        tool: ${{ steps.tools.outputs.missing }}
-
-    - name: Share the registry cache again
-      shell: bash
-      run: | # zizmor: ignore[github-env] fixed paths only
-        echo "CARGO_HOME=$SHARED_CARGO_HOME" >> "$GITHUB_ENV"
+        tool: cargo-xwin@0.23.1${{ inputs.tools != '' && format(',{0}', inputs.tools) || '' }}
 
     # The release, unpacked beside the cache and renamed into place, so a
     # job never sees a half-written copy.

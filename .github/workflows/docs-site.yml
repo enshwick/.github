@@ -7,10 +7,6 @@ name: Docs site
 # build collects pages from other public repositories (the platform's book at
 # each version's ref), so a deploy also runs when those change, by hand or
 # through docs-rebuild.
-#
-# It runs on a GitHub-hosted runner: it needs none of the organization
-# runners' Rust toolchain, sccache, cargo-xwin or Wine, and those runners
-# are kept for the jobs that do.
 
 on:
   workflow_call:

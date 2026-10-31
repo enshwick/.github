@@ -1,6 +1,6 @@
 {
   "name": "enshwick mod CI",
-  "description": "cargo xtask check on the organization runners for every pull request.",
+  "description": "cargo xtask check for every pull request and every push to main.",
   "iconName": "octicon checklist",
   "categories": ["Rust"],
   "filePatterns": ["^Cargo\\.toml$"]

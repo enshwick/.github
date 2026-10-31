@@ -34,7 +34,7 @@
       "groupName": "GitHub Actions"
     },
     {
-      "description": "The shared workflows and actions of enshwick/.github stay on main: the organization runners accept only workflows from main, so a pin to a commit would stop the jobs.",
+      "description": "The shared workflows and actions of enshwick/.github stay on main: the workflows check out their actions from main, so a pin to a commit would pair an old workflow with new actions.",
       "matchManagers": [
         "github-actions"
       ],
@@ -118,43 +118,14 @@
       "automerge": false
     },
     {
-      "description": "Tools pinned with a checksum in the composite actions wait three days, as the cargo tools do, so the Windows and Linux jobs move together.",
+      "description": "The GitHub CLI, pinned with a checksum in setup-rust, waits three days, as the cargo tools do.",
       "matchManagers": [
         "custom.regex"
       ],
       "matchDepNames": [
-        "cargo-xwin",
-        "mozilla/sccache",
-        "cargo-nextest",
-        "cargo-deny",
-        "llvm/llvm-project",
         "cli/cli"
       ],
       "minimumReleaseAge": "3 days"
-    },
-    {
-      "description": "sccache and LLVM in the composite actions get a new tag but not its SHA-256, which a person writes in; the checksum step fails until then.",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "matchDepNames": [
-        "mozilla/sccache",
-        "llvm/llvm-project"
-      ],
-      "automerge": false
-    },
-    {
-      "description": "LLVM follows the major of the Rust toolchain's own LLVM and moves with the toolchain, by hand.",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "matchDepNames": [
-        "llvm/llvm-project"
-      ],
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "enabled": false
     }
   ],
   "customManagers": [
@@ -266,61 +237,6 @@
     },
     {
       "customType": "regex",
-      "description": "The GE-Proton whose Wine setup-rust sets up: release tag and the SHA-512 of its download, updated together.",
-      "managerFilePatterns": [
-        "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
-      ],
-      "matchStrings": [
-        "GE_PROTON: (?<currentValue>GE-Proton\\d+-\\d+)\\s+GE_PROTON_SHA512: (?<currentDigest>[a-f0-9]{128})"
-      ],
-      "depNameTemplate": "GloriousEggroll/proton-ge-custom",
-      "datasourceTemplate": "github-release-attachments",
-      "versioningTemplate": "regex:^GE-Proton(?<major>\\d+)-(?<minor>\\d+)$"
-    },
-    {
-      "customType": "regex",
-      "description": "cargo-xwin in the composite actions: release tag and the SHA-256 of its download, updated together, under the crate's name so they share a branch with its other pins.",
-      "managerFilePatterns": [
-        "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
-      ],
-      "matchStrings": [
-        "XWIN_TAG: (?<currentValue>v\\d+\\.\\d+\\.\\d+)\\s+XWIN_SHA256: (?<currentDigest>[a-f0-9]{64})"
-      ],
-      "depNameTemplate": "cargo-xwin",
-      "packageNameTemplate": "rust-cross/cargo-xwin",
-      "datasourceTemplate": "github-release-attachments",
-      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
-    },
-    {
-      "customType": "regex",
-      "description": "cargo-nextest in the composite actions: release tag and the SHA-256 of its download, updated together, under the crate's name so they share a branch with its other pins.",
-      "managerFilePatterns": [
-        "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
-      ],
-      "matchStrings": [
-        "NEXTEST_TAG: (?<currentValue>cargo-nextest-\\d+\\.\\d+\\.\\d+)\\s+NEXTEST_SHA256: (?<currentDigest>[a-f0-9]{64})"
-      ],
-      "depNameTemplate": "cargo-nextest",
-      "packageNameTemplate": "nextest-rs/nextest",
-      "datasourceTemplate": "github-release-attachments",
-      "versioningTemplate": "regex:^cargo-nextest-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
-    },
-    {
-      "customType": "regex",
-      "description": "cargo-deny in the composite actions: release tag and the SHA-256 of its download, updated together, under the crate's name so they share a branch with its other pins.",
-      "managerFilePatterns": [
-        "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
-      ],
-      "matchStrings": [
-        "DENY_TAG: (?<currentValue>\\d+\\.\\d+\\.\\d+)\\s+DENY_SHA256: (?<currentDigest>[a-f0-9]{64})"
-      ],
-      "depNameTemplate": "cargo-deny",
-      "packageNameTemplate": "EmbarkStudios/cargo-deny",
-      "datasourceTemplate": "github-release-attachments",
-      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
-    },
-    {
-      "customType": "regex",
       "description": "cli/cli in the composite actions: release tag and the SHA-256 of its download, updated together.",
       "managerFilePatterns": [
         "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
@@ -331,32 +247,6 @@
       "depNameTemplate": "cli/cli",
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
-    },
-    {
-      "customType": "regex",
-      "description": "mozilla/sccache in the composite actions: the release tag only, since its checksum files hold no file name and Renovate would hash the checksum file instead of the download.",
-      "managerFilePatterns": [
-        "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
-      ],
-      "matchStrings": [
-        "SCCACHE_TAG: (?<currentValue>v\\d+\\.\\d+\\.\\d+)"
-      ],
-      "depNameTemplate": "mozilla/sccache",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
-    },
-    {
-      "customType": "regex",
-      "description": "llvm/llvm-project in the composite actions: the release tag only, since its releases carry no checksum files and Renovate would download gigabytes to find one.",
-      "managerFilePatterns": [
-        "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
-      ],
-      "matchStrings": [
-        "LLVM_TAG: (?<currentValue>llvmorg-\\d+\\.\\d+\\.\\d+)"
-      ],
-      "depNameTemplate": "llvm/llvm-project",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "regex:^llvmorg-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
     }
   ],
   "customDatasources": {

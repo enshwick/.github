@@ -1,6 +1,6 @@
-# The merge gate: `cargo xtask check` on the organization runners through the
-# shared workflow, on every pull request. A push to main fills the build
-# caches pull requests start from.
+# The merge gate: `cargo xtask check` through the shared workflow, on every
+# pull request. A push to main fills the build caches pull requests start
+# from.
 name: ci
 
 on:
@@ -18,7 +18,6 @@ concurrency:
 
 jobs:
   rust:
-    # main: the organization runners run only workflows from main.
     uses: enshwick/.github/.github/workflows/rust-ci.yml@main # zizmor: ignore[unpinned-uses]
     permissions:
       contents: read
