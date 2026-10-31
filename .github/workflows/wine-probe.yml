@@ -45,7 +45,7 @@ jobs:
       - uses: ./.enshwick-ci/.github/actions/setup-rust # zizmor: ignore[self-repository]
         with:
           # cargo-nextest 0.9.150 (2026-10-26) is not yet in install-action's manifests.
-          tools: cargo-nextest@0.9.149
+          tools: cargo-nextest@0.9.150
           wine: true
 
       - name: Windows tests
