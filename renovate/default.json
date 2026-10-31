@@ -217,9 +217,10 @@
     },
     {
       "customType": "regex",
-      "description": "The nightly toolchain date in workflows.",
+      "description": "The nightly toolchain date in workflows and composite actions, such as the fuzz part's in setup-rust.",
       "managerFilePatterns": [
-        "/(^|/)\\.github/workflows/.+\\.ya?ml$/"
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
+        "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
       ],
       "matchStrings": [
         "nightly-(?<currentValue>\\d{4}-\\d{2}-\\d{2})"
