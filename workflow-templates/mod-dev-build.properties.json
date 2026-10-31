@@ -1,7 +1,0 @@
-{
-  "name": "enshwick mod dev build",
-  "description": "Builds the mod by hand and replaces the files of its rolling dev prerelease.",
-  "iconName": "octicon package",
-  "categories": ["Rust"],
-  "filePatterns": ["^Cargo\\.toml$"]
-}
