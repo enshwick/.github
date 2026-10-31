@@ -13,8 +13,10 @@ server image), which versions, and how to reproduce it.
 
 Every archive, PDB and SBOM our builds publish carries a build provenance
 attestation. With the [GitHub CLI](https://cli.github.com), this checks
-that a file was built by the organization's workflows from its repository:
+that a file was built by a workflow of the organization from one of its
+repositories. Put the name of the downloaded file in place of
+`enshwick.zip`:
 
 ```bash
-gh attestation verify enshwick.zip --owner enshwick --signer-repo enshwick/.github
+gh attestation verify enshwick.zip --owner enshwick
 ```
