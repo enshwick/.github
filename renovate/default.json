@@ -34,16 +34,6 @@
       "groupName": "GitHub Actions"
     },
     {
-      "description": "The shared workflows and actions of enshwick/.github stay on main: the workflows check out their actions from main, so a pin to a commit would pair an old workflow with new actions.",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "matchPackageNames": [
-        "enshwick/.github"
-      ],
-      "enabled": false
-    },
-    {
       "matchPackageNames": [
         "/^wasmtime/"
       ],
