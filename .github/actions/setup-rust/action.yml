@@ -20,7 +20,6 @@ runs:
     - name: Point caches at the tool cache
       shell: bash
       run: | # zizmor: ignore[github-env] fixed paths only
-
         cache="${RUNNER_TOOL_CACHE:-$HOME/.cache}"
         {
           echo "RUSTUP_HOME=$cache/rustup"
