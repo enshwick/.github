@@ -18,12 +18,18 @@
   },
   "packageRules": [
     {
+      "description": "Every release waits three days, so a hijacked crate, action or npm package is most likely found and yanked before it reaches main; security fixes come at once. Lock file maintenance has no release date to wait on, so a person merges it.",
+      "matchPackageNames": [
+        "*"
+      ],
+      "minimumReleaseAge": "3 days"
+    },
+    {
       "matchUpdateTypes": [
         "minor",
         "patch",
         "pin",
-        "digest",
-        "lockFileMaintenance"
+        "digest"
       ],
       "automerge": true
     },
@@ -113,26 +119,6 @@
       ],
       "groupName": "Rust toolchain",
       "automerge": false
-    },
-    {
-      "description": "Crates pinned outside Cargo.lock wait three days. Most are tools CI installs through taiki-e/install-action, where a version its manifests lack yet falls back to cargo-binstall instead of the download install-action checks; the rest (cargo install pins, cache keys, generated manifests) take the same delay.",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "matchDatasources": [
-        "crate"
-      ],
-      "minimumReleaseAge": "3 days"
-    },
-    {
-      "description": "The GitHub CLI, pinned with a checksum in setup-rust, waits three days, as the cargo tools do.",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "matchDepNames": [
-        "cli/cli"
-      ],
-      "minimumReleaseAge": "3 days"
     }
   ],
   "customManagers": [
