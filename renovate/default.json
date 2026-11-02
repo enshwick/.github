@@ -168,20 +168,6 @@
     },
     {
       "customType": "regex",
-      "description": "Wrangler, run through bunx in the site workflow and named in the schema URL of wrangler.jsonc.",
-      "managerFilePatterns": [
-        "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
-        "/(^|/)wrangler\\.jsonc?$/"
-      ],
-      "matchStrings": [
-        "WRANGLER_VERSION: (?<currentValue>\\d+\\.\\d+\\.\\d+)",
-        "unpkg\\.com/wrangler@(?<currentValue>\\d+\\.\\d+\\.\\d+)/"
-      ],
-      "depNameTemplate": "wrangler",
-      "datasourceTemplate": "npm"
-    },
-    {
-      "customType": "regex",
       "description": "The crate versions in the manifest cargo enshwick new writes for a mod, which the cargo manager cannot parse for its placeholders.",
       "managerFilePatterns": [
         "/(^|/)Cargo\\.toml\\.in$/"
