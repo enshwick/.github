@@ -216,6 +216,18 @@
       "depNameTemplate": "cli/cli",
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "A release download in a workflow step: the repository in a renovate comment, then the VERSION and SHA256 env lines, updated together so sha256sum -c keeps passing.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=github-release-attachments depName=(?<depName>[\\w.-]+/[\\w.-]+)\\s+VERSION: (?<currentValue>\\S+)\\s+SHA256: (?<currentDigest>[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "github-release-attachments",
+      "versioningTemplate": "semver"
     }
   ],
   "customDatasources": {
