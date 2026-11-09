@@ -229,6 +229,18 @@
       ],
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Release downloads a tool pins in a TOML table, such as cargo-enshwick's luau-lsp.toml: the version and the digest of its asset move in one update, one table per asset.",
+      "managerFilePatterns": [
+        "/\\.toml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=github-release-attachments depName=(?<depName>[\\w.-]+/[\\w.-]+)\\s+version = \"(?<currentValue>[\\w.+-]+)\"\\s+asset = \"[^\"]+\"\\s+sha256 = \"(?<currentDigest>[a-f0-9]{64})\""
+      ],
+      "datasourceTemplate": "github-release-attachments",
+      "versioningTemplate": "semver"
     }
   ],
   "customDatasources": {
