@@ -13,7 +13,9 @@ on:
 permissions: {}
 
 concurrency:
-  group: renovate-${{ github.head_ref }}
+  # A push just before the pull request is marked ready starts a draft run
+  # after the ready one; in a group of its own, it cannot cancel the check.
+  group: renovate-${{ github.head_ref }}-${{ github.event.pull_request.draft }}
   cancel-in-progress: true
 
 jobs:
