@@ -219,12 +219,13 @@
     },
     {
       "customType": "regex",
-      "description": "A release download in a workflow step: the repository in a renovate comment, then the VERSION and SHA256 env lines, updated together so sha256sum -c keeps passing.",
+      "description": "Release downloads checked with sha256sum -c in workflows and composite actions: the version and its digest move in one update, or the check fails.",
       "managerFilePatterns": [
-        "/(^|/)\\.github/workflows/.+\\.ya?ml$/"
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
+        "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=github-release-attachments depName=(?<depName>[\\w.-]+/[\\w.-]+)\\s+VERSION: (?<currentValue>\\S+)\\s+SHA256: (?<currentDigest>[a-f0-9]{64})"
+        "# renovate: datasource=github-release-attachments depName=(?<depName>[\\w.-]+/[\\w.-]+)\\s+(?:[A-Z0-9_]+_)?VERSION: (?<currentValue>[\\w.+-]+)\\s+(?:[A-Z0-9_]+_)?SHA256: (?<currentDigest>[a-f0-9]{64})"
       ],
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "semver"
