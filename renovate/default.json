@@ -6,7 +6,6 @@
     ":semanticCommits"
   ],
   "timezone": "Europe/Kyiv",
-  "notAnOption": true,
   "dependencyDashboard": false,
   "prHourlyLimit": 0,
   "prConcurrentLimit": 0,
