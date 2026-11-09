@@ -216,6 +216,19 @@
       "depNameTemplate": "cli/cli",
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Release downloads checked with sha256sum -c in workflows and composite actions: the version and its digest move in one update, or the check fails.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
+        "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=github-release-attachments depName=(?<depName>[\\w.-]+/[\\w.-]+)\\s+(?:[A-Z0-9_]+_)?VERSION: (?<currentValue>[\\w.+-]+)\\s+(?:[A-Z0-9_]+_)?SHA256: (?<currentDigest>[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "github-release-attachments",
+      "versioningTemplate": "semver"
     }
   ],
   "customDatasources": {
