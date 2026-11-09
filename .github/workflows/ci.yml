@@ -1,0 +1,23 @@
+# The merge gate: check.yml, whose job `check` is the required check.
+name: ci
+
+on:
+  # Every ready pull request, so the required check always reports; a draft
+  # runs nothing, and marking it ready runs the check.
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}-${{ github.event.pull_request.draft }} # a draft's late run never cancels a ready one
+  cancel-in-progress: true
+
+jobs:
+  # Skipped here, a draft reports no `ci / check` at all: a skipped one
+  # counts as passed.
+  ci:
+    if: github.event.pull_request.draft != true
+    uses: ./.github/workflows/check.yml
+    permissions:
+      contents: read

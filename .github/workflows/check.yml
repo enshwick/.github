@@ -1,0 +1,29 @@
+# Every enshwick repository extends the Renovate preset, so a bad option or
+# pattern is refused here before it reaches any of them.
+name: check
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    container:
+      image: ghcr.io/renovatebot/renovate:44.221.5@sha256:ff73c6043e78a4fa0d32378bc2093e65fceb082a040d10db20add14ebe1c650a
+      # The runner mounts a workspace only root may write; the image's own
+      # user could not check out into it.
+      options: --user root
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate the preset and the repository's config
+        # --no-global: files named on the command line are otherwise read as
+        # self-hosted config, which allows options a preset may not set.
+        run: renovate-config-validator --strict --no-global renovate/default.json renovate.json
