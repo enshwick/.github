@@ -1,27 +1,14 @@
-# Every enshwick repository extends the preset, so a bad option or pattern
-# is refused here before it reaches any of them.
-name: renovate
+# Every enshwick repository extends the Renovate preset, so a bad option or
+# pattern is refused here before it reaches any of them.
+name: check
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "renovate/**"
-      - renovate.json
-      - .github/workflows/renovate.yml
+  workflow_call:
 
 permissions: {}
 
-concurrency:
-  # A push just before the pull request is marked ready starts a draft run
-  # after the ready one; in a group of its own, it cannot cancel the check.
-  group: renovate-${{ github.head_ref }}-${{ github.event.pull_request.draft }}
-  cancel-in-progress: true
-
 jobs:
-  # A draft runs nothing; marking it ready runs the check.
-  validate:
-    if: github.event.pull_request.draft != true
+  check:
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     container:
