@@ -30,4 +30,4 @@ your PC, on a dedicated server and in a game you host.
 Enshwick is in alpha. Not made by or affiliated with Keen Games. Enshrouded is
 their trademark.
 
-[download]: https://github.com/enshwick/enshwick/releases/latest/download/enshwick.zip
+[download]: https://github.com/enshwick/enshwick/releases
