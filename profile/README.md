@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://enshwick.com"><img src="https://enshwick.com/og/github/enshwick.png" alt="Enshwick, the modding framework and API for Enshrouded" width="480"></a>
+  <a href="https://enshwick.com"><img src="https://enshwick.com/og/github/enshwick.png" alt="Enshwick, the modding framework and API for Enshrouded" width="360"></a>
 </p>
 
 <!--
@@ -12,15 +12,14 @@ The banner is drawn by that site's build.
 [Enshrouded](https://enshrouded.com).** Its mod loader runs Enshrouded mods on
 your PC, on a dedicated server and in a game you host.
 
-- **Mods in Rust, Luau, C, C++, Zig or as data alone.** C, C++, Zig and any
-  other language that can include a C header work through the
-  [C header](https://enshwick.com/dev/mods-in-c/). We test C and C++.
-- **The game updated, and you play on.** What Enshwick cannot find in the
-  new version, it turns off and names in chat. Everything else keeps working.
-- **Made for servers.** Install it into the server's folder. Players need the
-  same mods, except the mods that run only on the server.
-- **Our mods are free.** Admin Tools, Better Altars, Game Rates, Personal Safes
-  and more, each released on its own, with open code under the MIT licence.
+- **Rust, Luau, C, C++, Zig** or any language that can include a
+  [C header](https://enshwick.com/dev/mods-in-c/), or data alone.
+- **After a game update**, Enshwick turns off only what it cannot find and
+  names it in chat.
+- **On servers too**: players install the same mods, except those that run
+  only on the server.
+- **Free mods by the team**: Admin Tools, Better Altars, Game Rates and more,
+  under the MIT licence.
 
 **[enshwick.com](https://enshwick.com)** ·
 [Download][download] ·
