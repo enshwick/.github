@@ -3,10 +3,12 @@
 </p>
 
 <!--
-The site is the source of these words: the first paragraph is `site.description`
-of src/data/texts.json in enshwick/docs, and banner.png is
-https://enshwick.com/og/github/enshwick.png, which that site's build draws.
-Change the words there first.
+The site is the source of these words, in src/data/texts.json of enshwick/docs:
+the first paragraph is `site.description`; the alpha line `alpha.title` and
+`front.makers.abi`; the lines on game updates, servers, Linux, languages, tools
+and the licence repeat `front.faq.*` and `front.makers.*`; the last line
+`foot.not-affiliated`. banner.png is https://enshwick.com/og/github/enshwick.png,
+which that site's build draws. Change the words there first.
 -->
 
 Enshwick is the modding framework and API for
@@ -14,13 +16,15 @@ Enshwick is the modding framework and API for
 dedicated server. Write mods in Rust, Luau, C, C++ or as data.
 
 Enshwick is in alpha: version 1.0 is not out yet. Until 1.0, anything may
-change between alphas, so back up your saves before you update.
+change between alphas, so
+[back up your worlds](https://enshwick.com/guides/back-up-saves/) before you
+update.
 
 ## For players
 
 - Download `enshwick.zip` from the newest alpha on the
-  [releases page](https://github.com/enshwick/enshwick/releases), or let Vortex
-  install it from [Nexus Mods](https://www.nexusmods.com/site/mods/2511).
+  [releases page](https://github.com/enshwick/enshwick/releases), then follow
+  the [install guide](https://enshwick.com/guides/install/).
 - [Your first modded game](https://enshwick.com/start/first-modded-game/) shows
   each step, on Windows, Linux and Steam Deck.
 - [Mods by the Enshwick team](https://enshwick.com/#mods) lists our mods. Each
@@ -32,8 +36,10 @@ change between alphas, so back up your saves before you update.
 
 ## For server admins
 
-- Install Enshwick into the server's folder, as on a PC. Players need the same
-  mods, except the mods that run only on the server:
+- Install Enshwick into the server's folder, the one with
+  `enshrouded_server.exe`, as the
+  [install guide](https://enshwick.com/guides/install/) says. Players need the
+  same mods, except the mods that run only on the server:
   [play on a server](https://enshwick.com/guides/play-on-a-server/).
 - A Linux server runs the Windows server under Wine or Proton:
   [run a Linux server](https://enshwick.com/guides/run-a-linux-server/) and
@@ -44,20 +50,22 @@ change between alphas, so back up your saves before you update.
 ## For mod makers
 
 - Write a mod in Rust or Luau, or as plain data with no code. C and C++ work
-  through the C header. [Getting started](https://enshwick.com/dev/getting-started/)
-  creates a mod, puts it in the game and tests it without starting the game.
+  through the [C header](https://enshwick.com/dev/mods-in-c/).
+- We made tools to create a mod, put it in the game and test it without
+  starting the game. [Getting started](https://enshwick.com/dev/getting-started/)
+  shows them.
 - The [developer docs](https://enshwick.com/dev/) explain the API, and
   [API coverage](https://enshwick.com/dev/api-coverage/) shows what it reaches
   today.
-- The reference of the `enshwick` crate is on
-  [docs.rs](https://docs.rs/enshwick).
 - [What comes next](https://enshwick.com/aims/) lists the aims, without dates.
 
 ## Report a bug or ask for an API
 
-- [Open an issue](https://github.com/enshwick/enshwick/issues/new/choose): a
-  mod that does not work, a game update that broke something, an API call your
-  mod needs, or an idea.
+- [Open an issue in enshwick](https://github.com/enshwick/enshwick/issues/new/choose)
+  for the mod loader or the API: a game update that broke something, an API
+  call your mod needs, or an idea.
+- [Open an issue in mods](https://github.com/enshwick/mods/issues/new/choose)
+  for one of our mods.
 - Ask a question in
   [Discussions](https://github.com/enshwick/.github/discussions).
 - Report a security problem privately, as the
@@ -75,7 +83,8 @@ change between alphas, so back up your saves before you update.
 | [enshwick](https://github.com/enshwick/enshwick) | the framework: the mod loader, the API, the `cargo enshwick` tool and the modding book |
 | [mods](https://github.com/enshwick/mods) | our mods, each released on its own |
 | [docs](https://github.com/enshwick/docs) | the source of [enshwick.com](https://enshwick.com) |
-| [vortex-extension](https://github.com/enshwick/vortex-extension) | the Vortex extension that installs Enshwick and its mods |
+| [vortex-extension](https://github.com/enshwick/vortex-extension) | the [Vortex](https://www.nexusmods.com/about/vortex/) extension that installs Enshwick and its mods |
 
-Enshwick and our mods are free, and their code is open under the MIT licence.
-Enshrouded is a game by Keen Games. Enshwick is not affiliated with Keen Games.
+Enshwick and our mods are free. Their code is open under the MIT licence.
+
+Not made by or affiliated with Keen Games. Enshrouded is their trademark.
