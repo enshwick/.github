@@ -127,7 +127,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "rust-version, the toolchain's major and minor, beside the built-in rust-toolchain manager. Cargo.toml.in is the manifest cargo enshwick new writes for a mod.",
+      "description": "rust-version, the toolchain's major and minor, beside the built-in rust-toolchain manager. It reads the same datasource, so both see one release date and pass the minimum release age in the same run; only stable releases count. Cargo.toml.in is the manifest cargo enshwick new writes for a mod.",
       "managerFilePatterns": [
         "/(^|/)Cargo\\.toml(\\.in)?$/"
       ],
@@ -135,9 +135,9 @@
         "rust-version\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+)\""
       ],
       "depNameTemplate": "rust",
-      "packageNameTemplate": "rust-lang/rust",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+)"
+      "datasourceTemplate": "rust-version",
+      "versioningTemplate": "semver-coerced",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+)\\.\\d+$"
     },
     {
       "customType": "regex",
