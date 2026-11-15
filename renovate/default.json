@@ -135,9 +135,7 @@
         "rust-version\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+)\""
       ],
       "depNameTemplate": "rust",
-      "datasourceTemplate": "rust-version",
-      "versioningTemplate": "semver-coerced",
-      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+)\\.\\d+$"
+      "datasourceTemplate": "rust-version"
     },
     {
       "customType": "regex",
@@ -192,7 +190,7 @@
     },
     {
       "customType": "regex",
-      "description": "The nightly toolchain date in workflows and composite actions, such as the fuzz part's in setup-rust.",
+      "description": "The nightly toolchain date in workflows and composite actions, such as the fuzz part's in setup-rust. The rust-version datasource dates each nightly, so it passes the minimum release age; a datasource without dates never would.",
       "managerFilePatterns": [
         "/(^|/)\\.github/workflows/.+\\.ya?ml$/",
         "/(^|/)\\.github/actions/.+/action\\.ya?ml$/"
@@ -201,7 +199,8 @@
         "nightly-(?<currentValue>\\d{4}-\\d{2}-\\d{2})"
       ],
       "depNameTemplate": "rust-nightly",
-      "datasourceTemplate": "custom.rust-nightly",
+      "datasourceTemplate": "rust-version",
+      "extractVersionTemplate": "^nightly-(?<version>\\d{4}-\\d{2}-\\d{2})$",
       "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
     },
     {
@@ -242,11 +241,5 @@
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "semver"
     }
-  ],
-  "customDatasources": {
-    "rust-nightly": {
-      "defaultRegistryUrlTemplate": "https://static.rust-lang.org/dist/channel-rust-nightly-date.txt",
-      "format": "plain"
-    }
-  }
+  ]
 }
