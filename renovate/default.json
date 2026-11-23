@@ -49,9 +49,11 @@
       "groupName": "wasmtime"
     },
     {
-      "description": "Expressive Code plugins type against the core they depend on, so a plugin a version ahead of astro-expressive-code fails the site's type check.",
-      "matchSourceUrls": [
-        "https://github.com/expressive-code/expressive-code"
+      "description": "Expressive Code plugins type against the core that @astrojs/starlight brings in, so the plugins, the core and Starlight move together; a plugin ahead of that core fails the site's type check.",
+      "matchPackageNames": [
+        "@astrojs/starlight",
+        "astro-expressive-code",
+        "/^@expressive-code\\//"
       ],
       "groupName": "Expressive Code"
     },
