@@ -49,6 +49,13 @@
       "groupName": "wasmtime"
     },
     {
+      "description": "Expressive Code plugins type against the core they depend on, so a plugin a version ahead of astro-expressive-code fails the site's type check.",
+      "matchSourceUrls": [
+        "https://github.com/expressive-code/expressive-code"
+      ],
+      "groupName": "Expressive Code"
+    },
+    {
       "description": "The docs site runs the TypeScript 7.1 beta that @astrojs/ts-content-mapper needs; no other prerelease or nightly, so the next update is the first stable release.",
       "matchRepositories": [
         "enshwick/docs"
