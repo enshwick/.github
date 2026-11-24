@@ -6,7 +6,9 @@
     ":semanticCommits"
   ],
   "timezone": "Europe/Kyiv",
-  "dependencyDashboard": false,
+  "dependencyDashboard": {
+    "enabled": false
+  },
   "prHourlyLimit": 0,
   "prConcurrentLimit": 0,
   "platformCommit": "enabled",
