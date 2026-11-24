@@ -10,6 +10,7 @@
   "prHourlyLimit": 0,
   "prConcurrentLimit": 0,
   "platformCommit": "enabled",
+  "platformAutomerge": false,
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": [
