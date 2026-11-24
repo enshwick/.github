@@ -37,6 +37,13 @@
       "automerge": true
     },
     {
+      "description": "Renovate merges or queues a pull request itself, only once the checks of its current head pass. GitHub's own automerge, which Renovate enables in the second after each push without naming the head, once queued the previous green head, so the merged pin differed from the title.",
+      "matchPackageNames": [
+        "*"
+      ],
+      "platformAutomerge": false
+    },
+    {
       "matchManagers": [
         "github-actions"
       ],
