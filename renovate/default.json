@@ -6,7 +6,9 @@
     ":semanticCommits"
   ],
   "timezone": "Europe/Kyiv",
-  "dependencyDashboard": false,
+  "dependencyDashboard": {
+    "enabled": false
+  },
   "prHourlyLimit": 0,
   "prConcurrentLimit": 0,
   "platformCommit": "enabled",
@@ -42,6 +44,17 @@
         "github-actions"
       ],
       "groupName": "GitHub Actions"
+    },
+    {
+      "description": "The config validator image in check.yml: ghcr.io gives its releases no date, so under the release age it never updates. It runs only the validator, read-only, so it updates without a date, once a week in its own pull request.",
+      "matchPackageNames": [
+        "ghcr.io/renovatebot/renovate"
+      ],
+      "minimumReleaseAgeBehaviour": "timestamp-optional",
+      "schedule": [
+        "before 6am on monday"
+      ],
+      "groupName": "Renovate validator"
     },
     {
       "matchPackageNames": [
